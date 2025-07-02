@@ -1,6 +1,6 @@
 import { keccak_256 as keccak } from '@noble/hashes/sha3';
+import { sha256 } from '@noble/hashes/sha256';
 import { encodeFrame } from './codec';
-import { verifyAggregate } from './crypto';
 import { bls } from '@noble/curves/bls12-381';
 import type { Hex } from './types';
 

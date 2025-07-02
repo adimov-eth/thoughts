@@ -1,4 +1,3 @@
-```ts
 import * as rlp from 'rlp';
 import type {
   Frame, Transaction, TxKind, Input, Command, Hex, UInt64,
@@ -51,4 +50,3 @@ export const decodeInput = (buf: Buffer): Input => {
   const [from, to, c] = rlp.decode(buf) as any[];
   return { from: from.toString(), to: to.toString(), cmd: decodeCmd(c) };
 };
-```
