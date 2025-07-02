@@ -1,72 +1,69 @@
-import { describe, it, expect } from 'vitest'
-import fc from 'fast-check'
-import { applyConsensus, Frame, EntityRoot, Quorum } from '../src/core/consensus.js'
-import { asEntityId, asSignerId, asHeight } from '../src/types/brands.js'
-import { bls12_381 as bls } from '@noble/curves/bls12-381'
+import { reducer } from "../src/core/consensus.js";
+import { encodeRlp } from "@xln/core/encodeRlp";
+import { sha256 } from "@xln/core/hash";
+import { bls12_381 as bls } from "@noble/curves/bls12-381";
+import type { Frame } from "../src/core/types.js";
+import type { SignFrameCmd, CommitFrameCmd } from "../src/core/consensus.js";
 
-const signerA = asSignerId('a')
-const signerB = asSignerId('b')
-const signerC = asSignerId('c')
+const threshold = 2; // 2/3 majority
+const genesisRoot = sha256(new Uint8Array([0]));
 
-const skA = bls.utils.randomPrivateKey();
-const skB = bls.utils.randomPrivateKey();
-const skC = bls.utils.randomPrivateKey();
-
-const quorum: Quorum = {
-  members: [signerA, signerB, signerC],
-  pubKeys: {
-    [signerA]: bls.getPublicKey(skA),
-    [signerB]: bls.getPublicKey(skB),
-    [signerC]: bls.getPublicKey(skC),
-  },
-  weights: { [signerA]:1, [signerB]:1, [signerC]:1 },
-  threshold: 2,
+function makeFrame(id: number, prev: Uint8Array): Frame {
+  const post = sha256(encodeRlp([id, prev]));
+  return { id, prevState: prev, postState: post as any, txs: [] };
 }
 
-const baseFrame: Frame = {
-  height: asHeight(1n),
-  postState: new Uint8Array([9]),
-  prevRoot: new Uint8Array([0]),
-  proposer: signerA,
-  sig: bls.sign(new Uint8Array([9]), skA),
-}
+describe("all replicas converge deterministically", () => {
+  it("converges", () => {
+    let a = { head: null, votes: [], nonceMap: {} };
+    let b = { ...a };
+    let c = { ...a };
 
-function startRoot(): EntityRoot {
-  return { id: asEntityId('ent'), quorum, signerRecords:{ [signerA]:{nonce:0}, [signerB]:{nonce:0}, [signerC]:{nonce:0} } }
-}
+    const f1 = makeFrame(1, genesisRoot);
+    const privAlice = bls.utils.randomPrivateKey();
+    const privBob = bls.utils.randomPrivateKey();
+    const pubAlice = bls.getPublicKey(privAlice);
+    const pubBob = bls.getPublicKey(privBob);
+    const idAlice = Buffer.from(pubAlice).toString("hex");
+    const idBob = Buffer.from(pubBob).toString("hex");
+    const weightMap = { [idAlice]: 1, [idBob]: 1 };
+    const ctx = { weightMap, threshold };
+    const sigAlice = bls.sign(f1.postState, privAlice);
+    const signCmd: SignFrameCmd = {
+      type: "SIGN_FRAME",
+      frame: f1,
+      signer: idAlice,
+      sig: sigAlice,
+      nonce: 1,
+    };
+    a = reducer(a, signCmd, ctx);
+    b = reducer(b, signCmd, ctx);
+    c = reducer(c, signCmd, ctx);
 
-describe('consensus aggregation', () => {
-  it('commit payload deterministic regardless of vote order', () =>
-    fc.assert(
-      fc.property(
-        fc.shuffledSubarray([signerB, signerC], {minLength:2}),
-        fc.shuffledSubarray([signerB, signerC], {minLength:2}),
-        (o1, o2) => {
-          let r = applyConsensus(startRoot(), { type:'PROPOSE_FRAME', frame: baseFrame });
-          let st = r.next;
-          let c1: Uint8Array | undefined;
-          for (const s of o1) {
-            const sk = s === signerB ? skB : skC;
-            const res = applyConsensus(st, { type:'SIGN_FRAME', signer: s, sig: bls.sign(baseFrame.postState, sk), nonce: 1 });
-            if (res.outbox.length) c1 = res.outbox[0].payload;
-            st = res.next;
-          }
+    const sigBob = bls.sign(f1.postState, privBob);
+    const signCmd2: SignFrameCmd = {
+      type: "SIGN_FRAME",
+      frame: f1,
+      signer: idBob,
+      sig: sigBob,
+      nonce: 1,
+    };
+    a = reducer(a, signCmd2, ctx);
+    b = reducer(b, signCmd2, ctx);
+    c = reducer(c, signCmd2, ctx);
 
-          r = applyConsensus(startRoot(), { type:'PROPOSE_FRAME', frame: baseFrame });
-          st = r.next;
-          let c2: Uint8Array | undefined;
-          for (const s of o2) {
-            const sk = s === signerB ? skB : skC;
-            const res = applyConsensus(st, { type:'SIGN_FRAME', signer: s, sig: bls.sign(baseFrame.postState, sk), nonce: 1 });
-            if (res.outbox.length) c2 = res.outbox[0].payload;
-            st = res.next;
-          }
+    const agg = bls.aggregateSignatures([sigAlice, sigBob]);
+    const commitCmd: CommitFrameCmd = {
+      type: "COMMIT_FRAME",
+      frame: f1,
+      aggregateSig: agg,
+    };
+    const sA = reducer(a, commitCmd, ctx);
+    const sB = reducer(b, commitCmd, ctx);
+    const sC = reducer(c, commitCmd, ctx);
 
-          expect(c1).toBeDefined();
-          expect(c2).toBeDefined();
-          expect(c1).toStrictEqual(c2);
-        }
-      ),
-      { numRuns: 5 }
-    ))
-})
+    expect(sA.head?.postState).toEqual(f1.postState);
+    expect(sB).toEqual(sA);
+    expect(sC).toEqual(sA);
+  });
+});

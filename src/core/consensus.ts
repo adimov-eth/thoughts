@@ -1,217 +1,79 @@
-import { bls12_381 as bls } from '@noble/curves/bls12-381';
-import { rlp }              from './codec.js';
-import {
-  EntityId, SignerId, FrameHeight, asSignerId, asHeight
-} from '../types/brands.js';
-import { OutMsg }   from './router.js';
+import { Frame } from "./types.js";
+import { hasQuorum, Vote } from "./quorum.js";
+import { verifyAggregate } from "@xln/core/bls.js";
 
-export interface Frame {
-  readonly height:  FrameHeight;
-  readonly postState: Uint8Array;
-  readonly prevRoot: Uint8Array;
-  readonly proposer: SignerId;
-  readonly sig:      Uint8Array;
+export interface ConsensusState {
+  /** The latest committed frame (or null at genesis). */
+  head: Frame | null;
+  /** Votes collected for the *next* frame. */
+  votes: Vote[];
+  /** Last accepted nonce per signer (replay protection). */
+  nonceMap: Record<string, number>;
 }
 
-export interface Quorum {
-  readonly members:   readonly SignerId[];
-  readonly pubKeys:   Record<SignerId, Uint8Array>;
-  readonly weights:   Record<SignerId, number>;
-  readonly threshold: number;
+export interface SignFrameCmd {
+  type: "SIGN_FRAME";
+  frame: Frame;
+  signer: string;
+  sig: Uint8Array;
+  nonce: number;
 }
 
-export interface EntityRoot {
-  readonly id: EntityId;
-  readonly quorum: Quorum;
-  readonly signerRecords: Record<SignerId, { nonce: number }>;
-  readonly lastCommitted?: Frame;
-  readonly proposed?: Frame;
-  readonly votes?: Record<SignerId, Uint8Array>;
+export interface CommitFrameCmd {
+  type: "COMMIT_FRAME";
+  frame: Frame;
+  aggregateSig: Uint8Array;
 }
 
-export type Command =
-  | { type: 'PROPOSE_FRAME'; frame: Frame }
-  | { type: 'SIGN_FRAME';    signer: SignerId; sig: Uint8Array; nonce: number }
-  | { type: 'COMMIT_FRAME';  frame: Frame; aggSig: Uint8Array; aggPub: Uint8Array };
+export type Command = SignFrameCmd | CommitFrameCmd;
 
-export interface ConsensusResult {
-  readonly next: EntityRoot;
-  readonly outbox: readonly OutMsg[];
+export interface ReducerCtx {
+  weightMap: Record<string, number>;
+  threshold: number;
 }
 
-export function applyConsensus(
-  root: EntityRoot,
-  cmd: Command
-): ConsensusResult {
+/** Pure reducer – **no** I/O, timers, randomness. */
+export function reducer(
+  state: ConsensusState,
+  cmd: Command,
+  ctx: ReducerCtx,
+): ConsensusState {
   switch (cmd.type) {
-    case 'PROPOSE_FRAME': {
-      if (root.proposed) throw new Error('entity already voting');
-      const votes: Record<SignerId, Uint8Array> = {
-        [cmd.frame.proposer]: cmd.frame.sig,
+    case "SIGN_FRAME": {
+      const v: Vote = {
+        signer: cmd.signer,
+        sig: cmd.sig,
+        nonce: cmd.nonce,
+        msg: cmd.frame.postState,
       };
-
-      if (root.quorum.threshold === 1) {
-        const { aggSig, aggPub } = aggregate(root.quorum, votes);
-        const commitMsg = mkCommit(root.id, cmd.frame, aggSig, aggPub);
-        return {
-          next: {
-            ...root,
-            lastCommitted: cmd.frame,
-            proposed: undefined,
-            votes: undefined,
-          },
-          outbox: [commitMsg],
-        };
-      }
-
-      const outbox = mkSignRequests(root.id, cmd.frame, root.quorum.members);
-      return { next: { ...root, proposed: cmd.frame, votes }, outbox };
+      return { ...state, votes: [...state.votes, v] };
     }
 
-    case 'SIGN_FRAME': {
-      if (!root.proposed) throw new Error('no active proposal');
-      const rec = root.signerRecords[cmd.signer];
-      if (!rec || cmd.nonce !== rec.nonce + 1) throw new Error('bad nonce');
-      if (root.votes?.[cmd.signer]) return { next: root, outbox: [] };
+    case "COMMIT_FRAME": {
+      // 1) verify the aggregated signature first
+      if (
+        !verifyAggregate(
+          cmd.aggregateSig,
+          [cmd.frame.postState],
+          state.votes.map((v) => new Uint8Array(Buffer.from(v.signer, "hex"))),
+        )
+      )
+        return state; // invalid sig – ignore
 
-      const votes = { ...(root.votes ?? {}), [cmd.signer]: cmd.sig };
-      const records = {
-        ...root.signerRecords,
-        [cmd.signer]: { nonce: cmd.nonce },
-      };
+      // 2) check weighted quorum + replay‑safe
+      const ok = hasQuorum({
+        votes: state.votes,
+        weightMap: ctx.weightMap,
+        threshold: ctx.threshold,
+        nonceMap: state.nonceMap,
+      });
+      if (!ok) return state;
 
-      const weight = Object.keys(votes).reduce(
-        (sum, id) => sum + (root.quorum.weights[asSignerId(id)] || 0),
-        0
-      );
-      if (weight < root.quorum.threshold) {
-        return { next: { ...root, votes, signerRecords: records }, outbox: [] };
-      }
+      // 3) commit: update nonce map, clear votes, advance head
+      const updatedNonce = { ...state.nonceMap };
+      for (const v of state.votes) updatedNonce[v.signer] = v.nonce;
 
-      const { aggSig, aggPub } = aggregate(root.quorum, votes);
-      const commitMsg = mkCommit(root.id, root.proposed, aggSig, aggPub);
-      return { next: { ...root, votes, signerRecords: records }, outbox: [commitMsg] };
-    }
-
-    case 'COMMIT_FRAME': {
-      if (!root.proposed) throw new Error('no proposal pending commit');
-      if (cmpFrame(root.proposed, cmd.frame) !== 0) {
-        throw new Error('commit frame mismatch');
-      }
-
-      const ok = bls.verify(cmd.aggSig, cmd.frame.postState, cmd.aggPub);
-      if (!ok) throw new Error('agg sig verification failed');
-
-      return {
-        next: {
-          ...root,
-          lastCommitted: cmd.frame,
-          proposed: undefined,
-          votes: undefined,
-        },
-        outbox: [],
-      };
+      return { head: cmd.frame, votes: [], nonceMap: updatedNonce };
     }
   }
 }
-
-function mkSignRequests(
-  entity: EntityId,
-  frame: Frame,
-  members: readonly SignerId[]
-): OutMsg[] {
-  let seq = 0n;
-  return members
-    .filter((id) => id !== frame.proposer)
-    .map((id) => ({
-      from: frame.proposer as unknown as EntityId,
-      to: id as unknown as EntityId,
-      seq: seq++,
-      payload: encodeSignReq(frame),
-    }));
-}
-
-function mkCommit(
-  entity: EntityId,
-  frame: Frame,
-  aggSig: Uint8Array,
-  aggPub: Uint8Array
-): OutMsg {
-  return {
-    from: frame.proposer as unknown as EntityId,
-    to: entity,
-    seq: frame.height,
-    payload: encodeCommit({ frame, aggSig, aggPub }),
-  };
-}
-
-function aggregate(
-  quorum: Quorum,
-  votes: Record<SignerId, Uint8Array>
-): { aggSig: Uint8Array; aggPub: Uint8Array } {
-  const orderedIds = Object.keys(votes).sort();
-  const sigs = orderedIds.map((id) => votes[asSignerId(id)]);
-  const pubs = orderedIds.map((id) => quorum.pubKeys[asSignerId(id)]);
-  return {
-    aggSig: bls.aggregateSignatures(sigs),
-    aggPub: bls.aggregatePublicKeys(pubs),
-  };
-}
-
-const cmpFrame = (a: Frame, b: Frame) => Number(a.height - b.height);
-
-/* ---------- codec ---------- */
-
-type SignReqPayload = Frame;
-type CommitPayload = { frame: Frame; aggSig: Uint8Array; aggPub: Uint8Array };
-
-const encodeSignReq = (f: SignReqPayload) =>
-  rlp.enc([
-    f.height.toString(),
-    f.postState,
-    f.prevRoot,
-    f.proposer,
-    f.sig,
-  ]);
-
-const encodeCommit = (c: CommitPayload) =>
-  rlp.enc([encodeFrame(c.frame), c.aggSig, c.aggPub]);
-
-const encodeFrame = (f: Frame) =>
-  rlp.enc([
-    f.height.toString(),
-    f.postState,
-    f.prevRoot,
-    f.proposer,
-    f.sig,
-  ]);
-
-export const decodeCommit = (bytes: Uint8Array): CommitPayload => {
-  const [frameBuf, aggSig, aggPub] = rlp.dec(bytes) as [
-    Uint8Array,
-    Uint8Array,
-    Uint8Array,
-  ];
-  return {
-    frame: decodeFrame(frameBuf),
-    aggSig: new Uint8Array(aggSig),
-    aggPub: new Uint8Array(aggPub),
-  };
-};
-
-const decodeFrame = (b: Uint8Array): Frame => {
-  const [h, postState, prevRoot, proposer, sig] = rlp.dec(b) as [
-    string,
-    Uint8Array,
-    Uint8Array,
-    string,
-    Uint8Array,
-  ];
-  return {
-    height: asHeight(BigInt(h)),
-    postState: new Uint8Array(postState),
-    prevRoot: new Uint8Array(prevRoot),
-    proposer: asSignerId(proposer),
-    sig: new Uint8Array(sig),
-  };
-};
