@@ -3,11 +3,13 @@ import {
   ProposedFrame, Address, Hex, TS
 } from '../types';
 import { keccak_256 as keccak } from '@noble/hashes/sha3';
+import { encFrame } from '../codec/rlp';
 import { verifyAggregate } from '../crypto/bls';
 
 /* ──────────── utils ──────────── */
+/** Compute canonical hash of a frame using keccak256 over its RLP encoding. */
 export const hashFrame = (f: Frame<any>): Hex =>
-  ('0x' + Buffer.from(keccak(JSON.stringify(f))).toString('hex')) as Hex;
+  ('0x' + Buffer.from(keccak(encFrame(f))).toString('hex')) as Hex;
 
 const sortTx = (a: Transaction, b: Transaction) =>
   a.nonce !== b.nonce ? (a.nonce < b.nonce ? -1 : 1)
