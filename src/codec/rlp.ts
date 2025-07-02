@@ -30,19 +30,22 @@ export const decTx = (b: Buffer): Transaction => {
 
 /* — frame — */
 export const encFrame = <S>(f: Frame<S>): Buffer => Buffer.from(rlp.encode([
-  bnToBuf(f.height), f.ts, f.txs.map(encTx), rlp.encode(f.state as any),
+  bnToBuf(f.height),
+  f.ts,
+  f.txs.map(encTx),
+  rlp.encode(JSON.stringify(f.state, (_,v)=>typeof v==='bigint'? v.toString():v)),
 ]));
 export const decFrame = <S>(b: Buffer): Frame<S> => {
   const [h, ts, txs, st] = rlp.decode(b) as any[];
   return {
     height: bufToBn(h), ts:Number(ts.toString()),
     txs:(txs as Buffer[]).map(decTx),
-    state:rlp.decode(st) as S,
+    state:JSON.parse(rlp.decode(st).toString()) as S,
   };
 };
 
 /* — command — */
-const encCmd = (c: Command): unknown => [c.type, JSON.stringify(c)];
+const encCmd = (c: Command): unknown => [c.type, JSON.stringify(c, (_,v)=>typeof v==='bigint'? v.toString():v)];
 const decCmd = (a:any[]): Command   => JSON.parse(a[1].toString());
 
 /* — input — */
