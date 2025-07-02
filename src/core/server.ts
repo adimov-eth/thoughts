@@ -1,5 +1,5 @@
 import {
-  Input, Replica, Command, addrKey, ServerFrame,
+  Input, Replica, Command, addrKey, ServerFrame, ServerState,
   TS, Hex, Address, UInt64
 } from '../types';
 import { applyCommand } from './entity';
@@ -9,26 +9,18 @@ import { encServerFrame } from '../codec/rlp';
 /* — helper: Merkle-root stub — */
 const computeRoot = (reps: Map<string, Replica>): Hex =>
   ('0x' + Buffer.from(
-      keccak(JSON.stringify([...reps.values()]
-        .map(r => ({ k:r.address, s:r.last.state }))))
+      keccak(JSON.stringify(
+        [...reps.values()].map(r => ({ addr: r.address, state: r.last.state }))
+      ))
     ).toString('hex')) as Hex;
 
-export interface ServerState {
-  height  : UInt64;
-  replicas: Map<string, Replica>;
-}
-export interface StepResult {
-  state : ServerState;
-  frame : ServerFrame;
-  outbox: Input[];
-}
 
 /** Deterministic one-tick reducer */
 export function applyServerBlock(
   prev: ServerState,
   batch: Input[],
   ts: TS,
-): StepResult {
+){
   let outbox: Input[] = [];
   const replicas = new Map(prev.replicas);
 
