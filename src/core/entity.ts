@@ -74,6 +74,7 @@ export const applyCommand = (rep:Replica, cmd:Command):Replica => {
       if(!rep.isAwaitingSignatures||!rep.proposal) return rep;
       if(cmd.frameHash!==rep.proposal.hash) return rep;
       if(!rep.last.state.quorum.members[cmd.signer]) return rep;
+      if(rep.proposal.sigs.has(cmd.signer)) return rep;
       const sigs=new Map(rep.proposal.sigs).set(cmd.signer,cmd.sig);
       return{...rep, proposal:{...rep.proposal,sigs}};
     }
