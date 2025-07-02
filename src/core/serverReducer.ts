@@ -1,27 +1,36 @@
 import { EntityId, SignerId, asSignerId } from '../types/brands.js';
 import { applyConsensus, Command, decodeCommit, Frame, EntityRoot } from './consensus.js';
-import { DeliveredInput, initRouter, route, RouterState, OutMsg } from './router.js';
+import { InboxInput, initRouter, route, RouterState, OutMsg } from './router.js';
 
 export interface ServerState {
   readonly router: RouterState;
   readonly entities: Map<EntityId, EntityRoot>;
+  readonly keyStore: Record<SignerId, Uint8Array>;
 }
 
-export const initServer = (): ServerState => ({
+export const initServer = (
+  keys: Record<SignerId, Uint8Array> = {}
+): ServerState => ({
   router: initRouter(),
   entities: new Map(),
+  keyStore: keys,
 });
 
-const initEntity = (id: EntityId): EntityRoot => ({
-  id,
-  quorum: {
-    members: [asSignerId(String(id))],
-    pubKeys: { [asSignerId(String(id))]: new Uint8Array(48) },
-    threshold: 1,
-  },
-});
+const initEntity = (
+  id: EntityId,
+  store: Record<SignerId, Uint8Array>
+): EntityRoot => {
+  const signer = asSignerId(String(id));
+  const pk = store[signer];
+  if (!pk) throw new Error('missing public key for signer');
+  return {
+    id,
+    quorum: { members: [signer], pubKeys: { [signer]: pk }, threshold: 1, weights: { [signer]: 1 } },
+    signerRecords: { [signer]: { nonce: 0 } },
+  };
+};
 
-export type Incoming = { ent: EntityId; cmd: Command } | DeliveredInput;
+export type Incoming = { ent: EntityId; cmd: Command } | InboxInput;
 
 export function applyServerFrame(
   state: ServerState,
@@ -40,7 +49,7 @@ export function applyServerFrame(
   const entities = new Map(state.entities);
   let outbox: OutMsg[] = [];
   for (const { ent, cmd } of toRun) {
-    if (!entities.has(ent)) entities.set(ent, initEntity(ent));
+    if (!entities.has(ent)) entities.set(ent, initEntity(ent, state.keyStore));
     const { next, outbox: o } = applyConsensus(entities.get(ent)!, cmd);
     entities.set(ent, next);
     outbox = [...outbox, ...o];
@@ -50,10 +59,10 @@ export function applyServerFrame(
     hasEntity: (id) => entities.has(id),
   });
 
-  return { router: nextRouter, entities };
+  return { router: nextRouter, entities, keyStore: state.keyStore };
 }
 
-function decodeInbox(d: DeliveredInput): { ent: EntityId; cmd: Command } {
+function decodeInbox(d: InboxInput): { ent: EntityId; cmd: Command } {
   const payload = decodeCommit(d.payload);
   return { ent: d.to, cmd: { type: 'COMMIT_FRAME', ...payload } };
 }

@@ -19,19 +19,20 @@ const quorum: Quorum = {
     [signerB]: bls.getPublicKey(skB),
     [signerC]: bls.getPublicKey(skC),
   },
+  weights: { [signerA]:1, [signerB]:1, [signerC]:1 },
   threshold: 2,
 }
 
 const baseFrame: Frame = {
   height: asHeight(1n),
-  stateRoot: new Uint8Array([9]),
+  postState: new Uint8Array([9]),
   prevRoot: new Uint8Array([0]),
   proposer: signerA,
   sig: bls.sign(new Uint8Array([9]), skA),
 }
 
 function startRoot(): EntityRoot {
-  return { id: asEntityId('ent'), quorum }
+  return { id: asEntityId('ent'), quorum, signerRecords:{ [signerA]:{nonce:0}, [signerB]:{nonce:0}, [signerC]:{nonce:0} } }
 }
 
 describe('consensus aggregation', () => {
@@ -46,7 +47,7 @@ describe('consensus aggregation', () => {
           let c1: Uint8Array | undefined;
           for (const s of o1) {
             const sk = s === signerB ? skB : skC;
-            const res = applyConsensus(st, { type:'SIGN_FRAME', signer: s, sig: bls.sign(baseFrame.stateRoot, sk) });
+            const res = applyConsensus(st, { type:'SIGN_FRAME', signer: s, sig: bls.sign(baseFrame.postState, sk), nonce: 1 });
             if (res.outbox.length) c1 = res.outbox[0].payload;
             st = res.next;
           }
@@ -56,7 +57,7 @@ describe('consensus aggregation', () => {
           let c2: Uint8Array | undefined;
           for (const s of o2) {
             const sk = s === signerB ? skB : skC;
-            const res = applyConsensus(st, { type:'SIGN_FRAME', signer: s, sig: bls.sign(baseFrame.stateRoot, sk) });
+            const res = applyConsensus(st, { type:'SIGN_FRAME', signer: s, sig: bls.sign(baseFrame.postState, sk), nonce: 1 });
             if (res.outbox.length) c2 = res.outbox[0].payload;
             st = res.next;
           }

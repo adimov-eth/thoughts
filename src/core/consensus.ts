@@ -7,7 +7,7 @@ import { OutMsg }   from './router.js';
 
 export interface Frame {
   readonly height:  FrameHeight;
-  readonly stateRoot: Uint8Array;
+  readonly postState: Uint8Array;
   readonly prevRoot: Uint8Array;
   readonly proposer: SignerId;
   readonly sig:      Uint8Array;
@@ -16,12 +16,14 @@ export interface Frame {
 export interface Quorum {
   readonly members:   readonly SignerId[];
   readonly pubKeys:   Record<SignerId, Uint8Array>;
+  readonly weights:   Record<SignerId, number>;
   readonly threshold: number;
 }
 
 export interface EntityRoot {
   readonly id: EntityId;
   readonly quorum: Quorum;
+  readonly signerRecords: Record<SignerId, { nonce: number }>;
   readonly lastCommitted?: Frame;
   readonly proposed?: Frame;
   readonly votes?: Record<SignerId, Uint8Array>;
@@ -29,7 +31,7 @@ export interface EntityRoot {
 
 export type Command =
   | { type: 'PROPOSE_FRAME'; frame: Frame }
-  | { type: 'SIGN_FRAME';    signer: SignerId; sig: Uint8Array }
+  | { type: 'SIGN_FRAME';    signer: SignerId; sig: Uint8Array; nonce: number }
   | { type: 'COMMIT_FRAME';  frame: Frame; aggSig: Uint8Array; aggPub: Uint8Array };
 
 export interface ConsensusResult {
@@ -68,17 +70,27 @@ export function applyConsensus(
 
     case 'SIGN_FRAME': {
       if (!root.proposed) throw new Error('no active proposal');
+      const rec = root.signerRecords[cmd.signer];
+      if (!rec || cmd.nonce !== rec.nonce + 1) throw new Error('bad nonce');
       if (root.votes?.[cmd.signer]) return { next: root, outbox: [] };
 
       const votes = { ...(root.votes ?? {}), [cmd.signer]: cmd.sig };
+      const records = {
+        ...root.signerRecords,
+        [cmd.signer]: { nonce: cmd.nonce },
+      };
 
-      if (Object.keys(votes).length < root.quorum.threshold) {
-        return { next: { ...root, votes }, outbox: [] };
+      const weight = Object.keys(votes).reduce(
+        (sum, id) => sum + (root.quorum.weights[asSignerId(id)] || 0),
+        0
+      );
+      if (weight < root.quorum.threshold) {
+        return { next: { ...root, votes, signerRecords: records }, outbox: [] };
       }
 
       const { aggSig, aggPub } = aggregate(root.quorum, votes);
       const commitMsg = mkCommit(root.id, root.proposed, aggSig, aggPub);
-      return { next: { ...root, votes }, outbox: [commitMsg] };
+      return { next: { ...root, votes, signerRecords: records }, outbox: [commitMsg] };
     }
 
     case 'COMMIT_FRAME': {
@@ -87,7 +99,7 @@ export function applyConsensus(
         throw new Error('commit frame mismatch');
       }
 
-      const ok = bls.verify(cmd.aggSig, cmd.frame.stateRoot, cmd.aggPub);
+      const ok = bls.verify(cmd.aggSig, cmd.frame.postState, cmd.aggPub);
       if (!ok) throw new Error('agg sig verification failed');
 
       return {
@@ -156,7 +168,7 @@ type CommitPayload = { frame: Frame; aggSig: Uint8Array; aggPub: Uint8Array };
 const encodeSignReq = (f: SignReqPayload) =>
   rlp.enc([
     f.height.toString(),
-    f.stateRoot,
+    f.postState,
     f.prevRoot,
     f.proposer,
     f.sig,
@@ -168,7 +180,7 @@ const encodeCommit = (c: CommitPayload) =>
 const encodeFrame = (f: Frame) =>
   rlp.enc([
     f.height.toString(),
-    f.stateRoot,
+    f.postState,
     f.prevRoot,
     f.proposer,
     f.sig,
@@ -188,7 +200,7 @@ export const decodeCommit = (bytes: Uint8Array): CommitPayload => {
 };
 
 const decodeFrame = (b: Uint8Array): Frame => {
-  const [h, stateRoot, prevRoot, proposer, sig] = rlp.dec(b) as [
+  const [h, postState, prevRoot, proposer, sig] = rlp.dec(b) as [
     string,
     Uint8Array,
     Uint8Array,
@@ -197,7 +209,7 @@ const decodeFrame = (b: Uint8Array): Frame => {
   ];
   return {
     height: asHeight(BigInt(h)),
-    stateRoot: new Uint8Array(stateRoot),
+    postState: new Uint8Array(postState),
     prevRoot: new Uint8Array(prevRoot),
     proposer: asSignerId(proposer),
     sig: new Uint8Array(sig),

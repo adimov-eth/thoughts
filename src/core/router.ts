@@ -7,7 +7,7 @@ export interface OutMsg {
   readonly payload: Uint8Array;
 }
 
-export interface DeliveredInput {
+export interface InboxInput {
   readonly to: EntityId;
   readonly payload: Uint8Array;
 }
@@ -24,7 +24,7 @@ export function route(
   state: RouterState,
   newMsgs: readonly OutMsg[],
   opts: { hasEntity: (id: EntityId) => boolean }
-): { nextRouter: RouterState; inbox: readonly DeliveredInput[] } {
+): { nextRouter: RouterState; inbox: readonly InboxInput[] } {
   if (newMsgs.length === 0) return { nextRouter: state, inbox: [] };
 
   const sorted = [...newMsgs].sort(bySenderSeq);
@@ -47,7 +47,7 @@ export function route(
     prevKey = key;
   }
 
-  const deliver: DeliveredInput[] = [];
+  const deliver: InboxInput[] = [];
   const stay: OutMsg[] = [];
   for (const m of uniq) {
     (opts.hasEntity(m.to) ? deliver : stay).push({ to: m.to, payload: m.payload });
