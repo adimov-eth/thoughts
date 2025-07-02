@@ -6,3 +6,12 @@ site
 # macOS
 .DS_Store
 
+# Build output
+*.js
+*.js.map
+*.d.ts
+!*.config.js
+dist/
+build/
+out/
+

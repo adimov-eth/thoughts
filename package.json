@@ -5,7 +5,8 @@
     "typedoc": "typedoc --out docs/api src --skipErrorChecking",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "lint": "eslint 'src/**/*.ts' --max-warnings=0"
+    "lint": "eslint 'src/**/*.ts' --max-warnings=0",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@noble/curves": "^1.9.2",

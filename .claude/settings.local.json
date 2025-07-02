@@ -12,7 +12,12 @@
       "Bash(git push:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr diff:*)",
-      "Bash(gh pr close:*)"
+      "Bash(gh pr close:*)",
+      "Bash(git branch:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(grep:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
