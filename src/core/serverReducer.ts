@@ -1,4 +1,4 @@
-import { EntityId, SignerId } from '../types/brands.js';
+import { EntityId, SignerId, asSignerId } from '../types/brands.js';
 import { applyConsensus, Command, decodeCommit, Frame, EntityRoot } from './consensus.js';
 import { DeliveredInput, initRouter, route, RouterState, OutMsg } from './router.js';
 
@@ -14,19 +14,24 @@ export const initServer = (): ServerState => ({
 
 const initEntity = (id: EntityId): EntityRoot => ({
   id,
-  quorum: { members: [id as unknown as SignerId], pubKeys: {}, threshold: 1 },
+  quorum: {
+    members: [asSignerId(String(id))],
+    pubKeys: { [asSignerId(String(id))]: new Uint8Array(48) },
+    threshold: 1,
+  },
 });
+
+export type Incoming = { ent: EntityId; cmd: Command } | DeliveredInput;
 
 export function applyServerFrame(
   state: ServerState,
-  incoming: readonly (Command | DeliveredInput)[]
+  incoming: readonly Incoming[]
 ): ServerState {
   const toRun: { ent: EntityId; cmd: Command }[] = [];
 
   for (const item of incoming) {
-    if ('type' in item) {
-      const ent = (item as any).entity ?? (item as any).frame?.proposer;
-      toRun.push({ ent: ent as EntityId, cmd: item });
+    if ('cmd' in item) {
+      toRun.push(item);
     } else {
       toRun.push(decodeInbox(item));
     }
