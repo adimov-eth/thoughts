@@ -1,14 +1,18 @@
-import {
-  Replica, Command, EntityState, Frame, Transaction, Quorum,
-  ProposedFrame, Address, Hex, TS
-} from '../types';
-import { encFrame }        from '../codec/rlp';
-import { keccak_256 }      from '@noble/hashes/sha3';
-import { bytesToHex }      from '@noble/hashes/utils';
+import { keccak_256 } from '@noble/hashes/sha3';
+import { bytesToHex } from '@noble/hashes/utils';
+import { encFrame } from '../codec/rlp';
 import { verifyAggregate } from '../crypto/bls';
+import {
+  Address,
+  Command, EntityState, Frame,
+  Hex,
+  ProposedFrame,
+  Quorum,
+  Replica,
+  Transaction,
+  TS
+} from '../types';
 
-/* ──────────── utils ──────────── */
-/** Compute canonical hash of a frame using keccak256 over its RLP encoding. */
 export const hashFrame = (f: Frame<any>): Hex =>
   ('0x' + bytesToHex(keccak_256(encFrame(f)))) as Hex;
 

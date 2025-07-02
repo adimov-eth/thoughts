@@ -1,10 +1,15 @@
-import {
-  Input, Replica, Command, addrKey, ServerFrame, ServerState,
-  TS, Hex, Address, UInt64
-} from '../types';
-import { applyCommand } from './entity';
 import { keccak_256 as keccak } from '@noble/hashes/sha3';
 import { encServerFrame } from '../codec/rlp';
+import {
+  Address,
+  addrKey,
+  Hex,
+  Input, Replica,
+  ServerFrame, ServerState,
+  TS,
+  UInt64
+} from '../types';
+import { applyCommand } from './entity';
 
 /* — helper: Merkle-root stub — */
 const computeRoot = (reps: Map<string, Replica>): Hex =>
