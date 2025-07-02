@@ -21,9 +21,26 @@ export function route(
   emitted: readonly OutMsg[],
   opts: { hasEntity: (id: EntityId) => boolean }
 ): { nextRouter: RouterState; inboxBatch: readonly InboxInput[] } {
-  const merged = [...state.queue, ...emitted].sort((a, b) =>
+  const newMsgs = [...emitted].sort((a, b) =>
     a.from === b.from ? a.seq - b.seq : a.from.localeCompare(b.from)
   );
+  const merged: OutMsg[] = [];
+  const q = state.queue;
+  let i = 0,
+    j = 0;
+  while (i < q.length && j < newMsgs.length) {
+    const cmp =
+      q[i].from === newMsgs[j].from
+        ? q[i].seq - newMsgs[j].seq
+        : q[i].from.localeCompare(newMsgs[j].from);
+    if (cmp <= 0) {
+      merged.push(q[i++]);
+    } else {
+      merged.push(newMsgs[j++]);
+    }
+  }
+  for (; i < q.length; i++) merged.push(q[i]);
+  for (; j < newMsgs.length; j++) merged.push(newMsgs[j]);
   const deliver: InboxInput[] = [];
   const remain: OutMsg[] = [];
   for (const m of merged) {

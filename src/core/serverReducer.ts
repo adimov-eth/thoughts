@@ -1,6 +1,7 @@
 import { applyConsensus, Command } from './consensus.js';
 import { route, RouterState, InboxInput, OutMsg } from './router.js';
 import { EntityId } from '../types/brands.js';
+import * as rlp from 'rlp';
 
 export interface ServerState {
   readonly router: RouterState;
@@ -9,7 +10,11 @@ export interface ServerState {
 
 // Placeholder for entity initialization
 export function initEntity(id: EntityId) {
-  return {} as any;
+  return {
+    id,
+    quorum: { members: [], pubKeys: {}, threshold: 1 },
+    votes: new Map(),
+  };
 }
 
 export function applyServerFrame(
@@ -21,13 +26,14 @@ export function applyServerFrame(
 
   const routedCmds: { ent: EntityId; cmd: Command }[] = [];
   for (const inb of batch) {
-    if ((inb as any).type) {
-      const ic = inb as Command;
-      routedCmds.push({ ent: (ic as any).entity as EntityId, cmd: ic });
+    if ('type' in (inb as Command)) {
+      const ic = inb as Command & { entity: EntityId };
+      routedCmds.push({ ent: ic.entity, cmd: ic });
       continue;
     }
-    const cmd = decodeInbox((inb as InboxInput).payload);
-    routedCmds.push({ ent: inb.to, cmd });
+    const ii = inb as InboxInput;
+    const cmd = decodeInbox(ii.payload);
+    routedCmds.push({ ent: ii.to, cmd });
   }
 
   const aggregateOutbox: OutMsg[] = [];
@@ -47,5 +53,10 @@ export function applyServerFrame(
 }
 
 function decodeInbox(b: Uint8Array): Command {
-  throw new Error('not implemented');
+  const [aggSig, aggPub] = rlp.decode(Buffer.from(b)) as Buffer[];
+  return {
+    type: 'COMMIT_FRAME',
+    aggSig: new Uint8Array(aggSig),
+    aggPub: new Uint8Array(aggPub),
+  };
 }

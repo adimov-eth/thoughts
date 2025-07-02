@@ -4,12 +4,11 @@
     "": {
       "name": "thoughts",
       "dependencies": {
-        "@noble/bls12-381": "1.0.0",
+        "@noble/curves": "^1.9.2",
         "pino": "^9.7.0",
         "pino-pretty": "^13.0.0",
       },
       "devDependencies": {
-        "@noble/curves": "^1.9.2",
         "@noble/hashes": "^1.8.0",
         "@types/node": "^24.0.10",
         "@typescript-eslint/eslint-plugin": "^8.35.1",
@@ -126,8 +125,6 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.4", "", {}, "sha512-VT2+G1VQs/9oz078bLrYbecdZKs912zQlkelYpuf+SXF+QvZDYJlbx/LSx+meSAwdDFnF8FVXW92AVjjkVmgFw=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.29", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-uw6guiW/gcAGPDhLmd77/6lW8QLeiV5RUTsAX46Db6oLhGaVj4lhnPwb184s1bkc8kdVg/+h988dro8GRDpmYQ=="],
-
-    "@noble/bls12-381": ["@noble/bls12-381@1.0.0", "", {}, "sha512-58IMoseK4urY+18bwHgaKT2MVV0DdxcNArUqTyBkB+6BsketbwhcG2SLKGAwBFKSvhtGYgkExn1J+YN8NLq5Mw=="],
 
     "@noble/curves": ["@noble/curves@1.9.2", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-HxngEd2XUcg9xi20JkwlLCtYwfoFw4JGkuZpT+WlsPD4gB/cxkvTD8fSsoAnphGZhFdZYKeQIPCuFlWPm1uE0g=="],
 
