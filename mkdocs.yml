@@ -1,0 +1,10 @@
+site_name: thoughts docs
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Layer table: layers.md
+  - Data flow: data-flow.md
+  - Threat model: threat-model.md
+  - API reference: api/
+plugins:
+  - search
