@@ -1,6 +1,5 @@
 import { Runtime } from './core/runtime';
-import { Input, Transaction } from './types';
-import { randomPriv, pub, addr, sign } from './crypto/bls';
+import { addr, pub, randomPriv } from './crypto/bls';
 
 const rt=new Runtime();
 

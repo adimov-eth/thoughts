@@ -1,5 +1,5 @@
-import { keccak_256 as keccak } from '@noble/hashes/sha3';
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
+import { keccak_256 as keccak } from '@noble/hashes/sha3';
 import type { Hex } from '../types';
 
 const bytesToHex = (b: Uint8Array): Hex =>
@@ -7,7 +7,6 @@ const bytesToHex = (b: Uint8Array): Hex =>
 const hexToBytes = (h: Hex) =>
   Uint8Array.from(Buffer.from(h.slice(2), 'hex'));
 
-/* ──────────── key helpers ──────────── */
 export type PrivKey = Uint8Array;
 export type PubKey  = Uint8Array;
 
@@ -18,7 +17,6 @@ export const addr       = (pb: PubKey): Hex => {
   return bytesToHex(h.slice(-20));
 };
 
-/* ──────────── signatures ──────────── */
 export const sign = async (msg: Uint8Array, pr: PrivKey): Promise<Hex> =>
   bytesToHex(await bls.sign(msg, pr));
 

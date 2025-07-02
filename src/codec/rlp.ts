@@ -1,10 +1,16 @@
 // Pure RLP encode/decode helpers (no external deps except rlp).
 
+import { keccak_256 as keccak } from '@noble/hashes/sha3';
 import * as rlp from 'rlp';
 import type {
-  Frame, Transaction, TxKind, Input, Command, Hex, UInt64, ServerFrame,
+  Command,
+  Frame,
+  Hex,
+  Input,
+  ServerFrame,
+  Transaction, TxKind,
+  UInt64,
 } from '../types';
-import { keccak_256 as keccak } from '@noble/hashes/sha3';
 
 /* — helpers — */
 const bnToBuf = (n: UInt64) =>

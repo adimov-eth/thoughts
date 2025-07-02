@@ -1,8 +1,8 @@
-import { applyServerBlock } from './server';
-import { sign, aggregate, randomPriv, pub, addr } from '../crypto/bls';
-import { Input, Replica, Frame, EntityState, Quorum, Hex, ServerState, Transaction } from '../types';
 import pino from 'pino';
-import { makeLogger, ILogger } from '../logging';
+import { addr, aggregate, pub, randomPriv, sign } from '../crypto/bls';
+import { ILogger, makeLogger } from '../logging';
+import { EntityState, Frame, Hex, Input, Quorum, Replica, ServerState, Transaction } from '../types';
+import { applyServerBlock } from './server';
 
 /* ──────────── deterministic key‑gen for demo ──────────── */
 const PRIVS = [...Array(5)].map((_,i)=>randomPriv());
@@ -48,7 +48,7 @@ export class Runtime {
     this.log.debug('tick start', { height: this.state.height });
     const pendingInputs = this.pending.map(tx => ({
       from: tx.from,
-      to: '*',
+      to: '0x0000000000000000000000000000000000000000' as `0x${string}`,
       cmd: { type:'ADD_TX', addrKey:'demo:chat', tx },
     } as Input));
     this.pending = [];
