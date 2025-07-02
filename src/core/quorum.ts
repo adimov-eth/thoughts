@@ -2,10 +2,10 @@ import { Hash256 } from "./types.js";
 
 /** A single BLS vote for `frame.postState`. */
 export interface Vote {
-  signer: string;          // BLS public‑key ID (hex or bech32)
-  sig: Uint8Array;         // BLS signature
-  nonce: number;           // monotonically increasing per signer
-  msg: Hash256;            // always equals frame.postState
+  signer: string; // BLS public‑key ID (hex or bech32)
+  sig: Uint8Array; // BLS signature
+  nonce: number; // monotonically increasing per signer
+  msg: Hash256; // always equals frame.postState
 }
 
 export interface QuorumArgs {
@@ -19,8 +19,8 @@ export interface QuorumArgs {
 
 /**
  * True ⇢ quorum reached **and** no replay / duplicate attack detected.
- * ‑ ignores duplicate votes from the same signer  
- * ‑ aborts early on stale or skipped nonces  
+ * ‑ ignores duplicate votes from the same signer
+ * ‑ aborts early on stale or skipped nonces
  * ‑ O(n) in number of votes, constant memory
  */
 export function hasQuorum({
@@ -34,13 +34,13 @@ export function hasQuorum({
 
   for (const v of votes) {
     const lastNonce = nonceMap[v.signer] ?? 0;
-    if (v.nonce <= lastNonce) return false;          // ⚠️ replay
+    if (v.nonce !== lastNonce + 1) return false; // ⚠️ replay or skip
 
-    if (seen.has(v.signer)) continue;                // dup signer → ignore
+    if (seen.has(v.signer)) continue; // dup signer → ignore
     seen.add(v.signer);
 
     weight += weightMap[v.signer] ?? 0;
-    if (weight >= threshold) return true;            // fast exit
+    if (weight >= threshold) return true; // fast exit
   }
   return false;
 }
