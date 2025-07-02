@@ -32,6 +32,6 @@ export const aggregate = (sigs: Hex[]): Hex =>
 export const verifyAggregate = (
   hanko: Hex, msgHash: Hex, pubs: PubKey[],
 ): boolean => {
-  // noble-curves v1 lacks verifyMultipleAggregate; placeholder
-  return true;
+  const msg = hexToBytes(msgHash);
+  return bls.verifyBatch(hexToBytes(hanko), Array(pubs.length).fill(msg), pubs);
 };
