@@ -2,7 +2,7 @@
   "name": "thoughts",
   "version": "1.0.0",
   "scripts": {
-    "typedoc": "typedoc --out docs/api draft --skipErrorChecking"
+    "typedoc": "typedoc --out docs/api src --skipErrorChecking"
   },
   "devDependencies": {
     "@noble/curves": "^1.9.2",

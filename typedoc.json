@@ -1,4 +1,10 @@
 {
-  "entryPoints": ["draft/entity.ts", "draft/server.ts", "draft/codec.ts", "draft/crypto.ts", "draft/types.ts"],
+  "entryPoints": [
+    "src/core/entity.ts",
+    "src/core/server.ts",
+    "src/codec/rlp.ts",
+    "src/crypto/bls.ts",
+    "src/types.ts"
+  ],
   "tsconfig": "tsconfig.json"
 }
