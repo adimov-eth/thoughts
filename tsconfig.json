@@ -9,5 +9,5 @@
     "types": ["node"],
     "lib": ["es2020"]
   },
-  "include": ["draft/**/*.ts"]
+  "include": ["src/**/*.ts"]
 }

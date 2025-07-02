@@ -1,4 +1,4 @@
-3  High‑level Architecture Overview (draft §1‑2)
+3  High‑level Architecture Overview (src §1‑2)
 
 1  Motivation & scope
 
