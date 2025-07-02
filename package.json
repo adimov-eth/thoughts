@@ -1,0 +1,14 @@
+{
+  "name": "thoughts",
+  "version": "1.0.0",
+  "scripts": {
+    "typedoc": "typedoc --out docs/api draft --skipErrorChecking"
+  },
+  "devDependencies": {
+    "@noble/curves": "^1.9.2",
+    "@noble/hashes": "^1.8.0",
+    "@types/node": "^24.0.10",
+    "rlp": "^3.0.0",
+    "typedoc": "^0.28.7"
+  }
+}

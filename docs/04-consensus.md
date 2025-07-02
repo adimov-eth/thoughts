@@ -178,7 +178,7 @@ if (Cmd === 'COMMIT' && verifyCommit(cmd)) {
   state.proposal = undefined;
 }
 
-Full implementation lives in src/state.ts and src/server.ts (see code skeleton committed earlier).
+Full implementation lives in src/entity.ts and src/server.ts (see code skeleton committed earlier).
 
 ⸻
 

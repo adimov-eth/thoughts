@@ -1,19 +1,34 @@
 import { Input, Replica, Command, addrKey, Quorum, Hanko } from './types';
 import { randomPriv, pub, addr, sign, aggregate } from './crypto';
-import { applyCommand, powerCollected, hashFrame } from './state';
+import { applyCommand, powerCollected, hashFrame } from './entity';
 
+/**
+ * In-memory demo server that routes inputs between replicas and
+ * drives consensus ticks.
+ */
 export class Server {
-  /* deterministic 3‑signer dev wallet */
+  /**
+   * Deterministic three-signer dev wallet used for demos.
+   */
   signers = Array.from({ length: 3 }, () => {
     const priv = randomPriv();
     return { priv, pub: pub(priv), addr: addr(pub(priv)) };
   });
 
+  /** Map of replica key to replica state. */
   replicas = new Map<string, Replica>();   // key = addrKey(rep.address)
+  /** Input packets awaiting processing. */
   inbox: Input[] = [];
 
+  /**
+   * Queue an input packet to be processed on the next tick.
+   */
   enqueue(e: Input) { this.inbox.push(e); }
 
+  /**
+   * Execute a single consensus tick, draining the inbox and
+   * dispatching commands to replicas.
+   */
   async tick() {
     const tickTs = Date.now();
 
