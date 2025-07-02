@@ -3,50 +3,59 @@ import { EntityId } from '../types/brands.js';
 export interface OutMsg {
   readonly from: EntityId;
   readonly to: EntityId;
-  readonly seq: number;
+  readonly seq: bigint;
   readonly payload: Uint8Array;
 }
 
-export interface InboxInput {
+export interface DeliveredInput {
   readonly to: EntityId;
   readonly payload: Uint8Array;
 }
 
 export interface RouterState {
-  readonly queue: readonly OutMsg[];
+  readonly queue: readonly OutMsg[]; // sorted by (from,seq)
+}
+
+export function initRouter(): RouterState {
+  return { queue: [] };
 }
 
 export function route(
   state: RouterState,
-  emitted: readonly OutMsg[],
+  newMsgs: readonly OutMsg[],
   opts: { hasEntity: (id: EntityId) => boolean }
-): { nextRouter: RouterState; inboxBatch: readonly InboxInput[] } {
-  const newMsgs = [...emitted].sort((a, b) =>
-    a.from === b.from ? a.seq - b.seq : a.from.localeCompare(b.from)
-  );
+): { nextRouter: RouterState; inbox: readonly DeliveredInput[] } {
+  if (newMsgs.length === 0) return { nextRouter: state, inbox: [] };
+
+  const sorted = [...newMsgs].sort(bySenderSeq);
+
   const merged: OutMsg[] = [];
-  const q = state.queue;
-  let i = 0,
-    j = 0;
-  while (i < q.length && j < newMsgs.length) {
-    const cmp =
-      q[i].from === newMsgs[j].from
-        ? q[i].seq - newMsgs[j].seq
-        : q[i].from.localeCompare(newMsgs[j].from);
-    if (cmp <= 0) {
-      merged.push(q[i++]);
-    } else {
-      merged.push(newMsgs[j++]);
-    }
+  const a = state.queue;
+  const b = sorted;
+  let i = 0, j = 0;
+  while (i < a.length && j < b.length) {
+    merged.push(bySenderSeq(a[i], b[j]) <= 0 ? a[i++] : b[j++]);
   }
-  for (; i < q.length; i++) merged.push(q[i]);
-  for (; j < newMsgs.length; j++) merged.push(newMsgs[j]);
-  const deliver: InboxInput[] = [];
-  const remain: OutMsg[] = [];
+  merged.push(...a.slice(i), ...b.slice(j));
+
+  const uniq: OutMsg[] = [];
+  let prevKey = '';
   for (const m of merged) {
-    (opts.hasEntity(m.to) ? deliver : remain).push(m);
+    const key = `${m.from}:${m.seq}`;
+    if (key === prevKey) continue;
+    uniq.push(m);
+    prevKey = key;
   }
-  return { nextRouter: { queue: remain }, inboxBatch: deliver };
+
+  const deliver: DeliveredInput[] = [];
+  const stay: OutMsg[] = [];
+  for (const m of uniq) {
+    (opts.hasEntity(m.to) ? deliver : stay).push({ to: m.to, payload: m.payload });
+  }
+
+  return { nextRouter: { queue: stay }, inbox: deliver };
 }
 
-export const initRouter = (): RouterState => ({ queue: [] });
+const bySenderSeq = (a: OutMsg, b: OutMsg) =>
+  a.from === b.from ? (a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0)
+                    : a.from < b.from ? -1 : 1;

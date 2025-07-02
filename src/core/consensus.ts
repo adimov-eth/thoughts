@@ -1,13 +1,22 @@
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
-import { EntityId, SignerId, FrameHeight } from '../types/brands.js';
-import { OutMsg } from './router.js';
+import { rlp }              from './codec.js';
+import {
+  EntityId, SignerId, FrameHeight, asSignerId, asHeight
+} from '../types/brands.js';
+import { OutMsg }   from './router.js';
 
 export interface Frame {
-  readonly height: FrameHeight;
+  readonly height:  FrameHeight;
   readonly stateRoot: Uint8Array;
   readonly prevRoot: Uint8Array;
   readonly proposer: SignerId;
-  readonly sig: Uint8Array;
+  readonly sig:      Uint8Array;
+}
+
+export interface Quorum {
+  readonly members:   readonly SignerId[];
+  readonly pubKeys:   Record<SignerId, Uint8Array>;
+  readonly threshold: number;
 }
 
 export interface EntityRoot {
@@ -15,19 +24,13 @@ export interface EntityRoot {
   readonly quorum: Quorum;
   readonly lastCommitted?: Frame;
   readonly proposed?: Frame;
-  readonly votes?: Map<SignerId, Uint8Array>;
-}
-
-export interface Quorum {
-  readonly members: readonly SignerId[];
-  readonly pubKeys: Record<SignerId, Uint8Array>;
-  readonly threshold: number;
+  readonly votes?: Record<SignerId, Uint8Array>;
 }
 
 export type Command =
   | { type: 'PROPOSE_FRAME'; frame: Frame }
-  | { type: 'SIGN_FRAME'; signer: SignerId; sig: Uint8Array }
-  | { type: 'COMMIT_FRAME'; aggSig: Uint8Array; aggPub: Uint8Array };
+  | { type: 'SIGN_FRAME';    signer: SignerId; sig: Uint8Array }
+  | { type: 'COMMIT_FRAME';  frame: Frame; aggSig: Uint8Array; aggPub: Uint8Array };
 
 export interface ConsensusResult {
   readonly next: EntityRoot;
@@ -40,14 +43,14 @@ export function applyConsensus(
 ): ConsensusResult {
   switch (cmd.type) {
     case 'PROPOSE_FRAME': {
-      if (root.proposed) {
-        throw new Error('entity already voting');
-      }
-      const votes = new Map<SignerId, Uint8Array>([
-        [cmd.frame.proposer, cmd.frame.sig],
-      ]);
+      if (root.proposed) throw new Error('entity already voting');
+      const votes: Record<SignerId, Uint8Array> = {
+        [cmd.frame.proposer]: cmd.frame.sig,
+      };
 
       if (root.quorum.threshold === 1) {
+        const { aggSig, aggPub } = aggregate(root.quorum, votes);
+        const commitMsg = mkCommit(root.id, cmd.frame, aggSig, aggPub);
         return {
           next: {
             ...root,
@@ -55,44 +58,45 @@ export function applyConsensus(
             proposed: undefined,
             votes: undefined,
           },
-          outbox: [],
+          outbox: [commitMsg],
         };
       }
 
-      const outbox = mkSignRequests(
-        root.id,
-        cmd.frame,
-        root.quorum.members
-      );
+      const outbox = mkSignRequests(root.id, cmd.frame, root.quorum.members);
       return { next: { ...root, proposed: cmd.frame, votes }, outbox };
     }
+
     case 'SIGN_FRAME': {
       if (!root.proposed) throw new Error('no active proposal');
-      const votes = new Map(root.votes);
-      if (votes.has(cmd.signer)) return { next: { ...root, votes }, outbox: [] };
-      votes.set(cmd.signer, cmd.sig);
-      if (votes.size < root.quorum.threshold) {
+      if (root.votes?.[cmd.signer]) return { next: root, outbox: [] };
+
+      const votes = { ...(root.votes ?? {}), [cmd.signer]: cmd.sig };
+
+      if (Object.keys(votes).length < root.quorum.threshold) {
         return { next: { ...root, votes }, outbox: [] };
       }
-      const orderedIds = [...votes.keys()].sort();
-      const sigs = orderedIds.map((id) => votes.get(id)!);
-      const aggSig = bls.aggregateSignatures(sigs);
-      const aggPub = bls.aggregatePublicKeys(
-        orderedIds.map((id) => root.quorum.pubKeys[id])
-      );
-      const commit = mkCommitMsg(root.id, root.proposed!, aggSig, aggPub);
-      return { next: { ...root, votes }, outbox: [commit] };
+
+      const { aggSig, aggPub } = aggregate(root.quorum, votes);
+      const commitMsg = mkCommit(root.id, root.proposed, aggSig, aggPub);
+      return { next: { ...root, votes }, outbox: [commitMsg] };
     }
+
     case 'COMMIT_FRAME': {
-      if (!root.proposed) throw new Error('no proposal to commit');
-      const ok = bls.verify(
-        cmd.aggSig,
-        root.proposed.stateRoot,
-        cmd.aggPub
-      );
+      if (!root.proposed) throw new Error('no proposal pending commit');
+      if (cmpFrame(root.proposed, cmd.frame) !== 0) {
+        throw new Error('commit frame mismatch');
+      }
+
+      const ok = bls.verify(cmd.aggSig, cmd.frame.stateRoot, cmd.aggPub);
       if (!ok) throw new Error('agg sig verification failed');
+
       return {
-        next: { ...root, lastCommitted: root.proposed, proposed: undefined, votes: undefined },
+        next: {
+          ...root,
+          lastCommitted: cmd.frame,
+          proposed: undefined,
+          votes: undefined,
+        },
         outbox: [],
       };
     }
@@ -104,17 +108,18 @@ function mkSignRequests(
   frame: Frame,
   members: readonly SignerId[]
 ): OutMsg[] {
+  let seq = 0n;
   return members
     .filter((id) => id !== frame.proposer)
-    .map((id, i) => ({
+    .map((id) => ({
       from: frame.proposer as unknown as EntityId,
       to: id as unknown as EntityId,
-      seq: i,
-      payload: encodeSignRequest(frame),
+      seq: seq++,
+      payload: encodeSignReq(frame),
     }));
 }
 
-function mkCommitMsg(
+function mkCommit(
   entity: EntityId,
   frame: Frame,
   aggSig: Uint8Array,
@@ -123,22 +128,78 @@ function mkCommitMsg(
   return {
     from: frame.proposer as unknown as EntityId,
     to: entity,
-    seq: Number(frame.height),
+    seq: frame.height,
     payload: encodeCommit({ frame, aggSig, aggPub }),
   };
 }
 
-const encodeSignRequest = (f: Frame): Uint8Array => f.stateRoot;
-
-interface CommitPayload {
-  frame: Frame;
-  aggSig: Uint8Array;
-  aggPub: Uint8Array;
+function aggregate(
+  quorum: Quorum,
+  votes: Record<SignerId, Uint8Array>
+): { aggSig: Uint8Array; aggPub: Uint8Array } {
+  const orderedIds = Object.keys(votes).sort();
+  const sigs = orderedIds.map((id) => votes[asSignerId(id)]);
+  const pubs = orderedIds.map((id) => quorum.pubKeys[asSignerId(id)]);
+  return {
+    aggSig: bls.aggregateSignatures(sigs),
+    aggPub: bls.aggregatePublicKeys(pubs),
+  };
 }
 
-const encodeCommit = (c: CommitPayload): Uint8Array =>
-  new Uint8Array([
-    ...c.aggSig,
-    ...c.aggPub,
-    ...c.frame.stateRoot,
+const cmpFrame = (a: Frame, b: Frame) => Number(a.height - b.height);
+
+/* ---------- codec ---------- */
+
+type SignReqPayload = Frame;
+type CommitPayload = { frame: Frame; aggSig: Uint8Array; aggPub: Uint8Array };
+
+const encodeSignReq = (f: SignReqPayload) =>
+  rlp.enc([
+    f.height.toString(),
+    f.stateRoot,
+    f.prevRoot,
+    f.proposer,
+    f.sig,
   ]);
+
+const encodeCommit = (c: CommitPayload) =>
+  rlp.enc([encodeFrame(c.frame), c.aggSig, c.aggPub]);
+
+const encodeFrame = (f: Frame) =>
+  rlp.enc([
+    f.height.toString(),
+    f.stateRoot,
+    f.prevRoot,
+    f.proposer,
+    f.sig,
+  ]);
+
+export const decodeCommit = (bytes: Uint8Array): CommitPayload => {
+  const [frameBuf, aggSig, aggPub] = rlp.dec(bytes) as [
+    Uint8Array,
+    Uint8Array,
+    Uint8Array,
+  ];
+  return {
+    frame: decodeFrame(frameBuf),
+    aggSig: new Uint8Array(aggSig),
+    aggPub: new Uint8Array(aggPub),
+  };
+};
+
+const decodeFrame = (b: Uint8Array): Frame => {
+  const [h, stateRoot, prevRoot, proposer, sig] = rlp.dec(b) as [
+    string,
+    Uint8Array,
+    Uint8Array,
+    string,
+    Uint8Array,
+  ];
+  return {
+    height: asHeight(BigInt(h)),
+    stateRoot: new Uint8Array(stateRoot),
+    prevRoot: new Uint8Array(prevRoot),
+    proposer: asSignerId(proposer),
+    sig: new Uint8Array(sig),
+  };
+};

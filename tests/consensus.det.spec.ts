@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
 import { applyConsensus, Frame, EntityRoot, Quorum } from '../src/core/consensus.js'
-import { asEntityId, asSignerId } from '../src/types/brands.js'
+import { asEntityId, asSignerId, asHeight } from '../src/types/brands.js'
 import { bls12_381 as bls } from '@noble/curves/bls12-381'
 
 const signerA = asSignerId('a')
@@ -23,7 +23,7 @@ const quorum: Quorum = {
 }
 
 const baseFrame: Frame = {
-  height: 1 as any,
+  height: asHeight(1n),
   stateRoot: new Uint8Array([9]),
   prevRoot: new Uint8Array([0]),
   proposer: signerA,
@@ -31,7 +31,7 @@ const baseFrame: Frame = {
 }
 
 function startRoot(): EntityRoot {
-  return { id: asEntityId('ent'), quorum, votes: new Map() }
+  return { id: asEntityId('ent'), quorum }
 }
 
 describe('consensus aggregation', () => {
