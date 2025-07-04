@@ -1,4 +1,4 @@
-import type { Frame, FrameHeader, Address } from "../../src/core/types";
+import type { Frame, FrameHeader, Address } from "../../src/types";
 import { hashFrame } from "../../src/core/hash";
 
 export const mkFrameHeader = (

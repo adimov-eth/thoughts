@@ -1,4 +1,4 @@
-import type { EntityTx, Address } from "../../src/core/types";
+import type { EntityTx, Address } from "../../src/types";
 import { keccak_256 as keccak } from "@noble/hashes/sha3";
 
 export const createChatTx = (

@@ -5,7 +5,7 @@ import type {
   ServerInput,
   EntityTx,
   Address,
-} from "../src/core/types";
+} from "../src/types";
 import { createChatTx } from "./helpers/tx";
 
 describe("Mis-routing and Proposer Timeout Tests", () => {

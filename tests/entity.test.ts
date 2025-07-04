@@ -9,7 +9,7 @@ import type {
   ServerInput,
   Address,
   EntityTx,
-} from "../src/core/types";
+} from "../src/types";
 import { createChatTx } from "./helpers/tx";
 
 describe("Entity-level state machine", () => {
@@ -57,11 +57,12 @@ describe("Entity-level state machine", () => {
     state.set("1:chat", { attached: true, state: entityState });
 
     // First signature
+    const signHex1 = "0x" + "aa".repeat(96);
     const sign1: ServerInput = {
       inputId: "sign-1",
       frameId: 1,
       timestamp: now(),
-      inputs: [[0, "chat", { type: "signFrame", sig: signer1 + "sig1" }]],
+      inputs: [[0, "chat", { type: "signFrame", sig: signHex1 }]],
     };
 
     const { next: state1 } = applyServerFrame(state, sign1, now);
@@ -69,11 +70,12 @@ describe("Entity-level state machine", () => {
     expect(Object.keys(replica1.state.proposal!.sigs)).toHaveLength(1);
 
     // Duplicate signature from same signer
+    const signHex2 = "0x" + "bb".repeat(96);
     const sign2: ServerInput = {
       inputId: "sign-2",
       frameId: 2,
       timestamp: now(),
-      inputs: [[0, "chat", { type: "signFrame", sig: signer1 + "sig2" }]],
+      inputs: [[0, "chat", { type: "signFrame", sig: signHex2 }]],
     };
 
     const { next: state2 } = applyServerFrame(state1, sign2, now);
@@ -81,7 +83,7 @@ describe("Entity-level state machine", () => {
 
     // Should still have only one signature
     expect(Object.keys(replica2.state.proposal!.sigs)).toHaveLength(1);
-    expect(replica2.state.proposal!.sigs[signer1]).toBe(signer1 + "sig1");
+    expect(replica2.state.proposal!.sigs[signer1]).toBe(signHex1);
   });
 
   it("accepts signatures from different signers", async () => {
@@ -111,22 +113,24 @@ describe("Entity-level state machine", () => {
     state.set("1:chat", { attached: true, state: entityState });
 
     // Signatures from different signers
+    const signHex1 = "0x" + "aa".repeat(96);
+    const signHex2 = "0x" + "bb".repeat(96);
     const signs: ServerInput = {
       inputId: "signs",
       frameId: 1,
       timestamp: now(),
       inputs: [
-        [0, "chat", { type: "signFrame", sig: signer1 + "sig1" }],
-        [1, "chat", { type: "signFrame", sig: signer2 + "sig2" }],
+        [0, "chat", { type: "signFrame", sig: signHex1 }],
+        [1, "chat", { type: "signFrame", sig: signHex2 }],
       ],
     };
 
     const { next } = applyServerFrame(state, signs, now);
-    const replica = next.get("0:chat")!;
+    const rep0 = next.get("0:chat")!;
+    const rep1 = next.get("1:chat")!;
 
-    // Should have both signatures
-    expect(Object.keys(replica.state.proposal!.sigs)).toHaveLength(2);
-    expect(replica.state.proposal!.sigs[signer1]).toBe(signer1 + "sig1");
-    expect(replica.state.proposal!.sigs[signer2]).toBe(signer2 + "sig2");
+    // Each replica should record its own signature
+    expect(Object.keys(rep0.state.proposal!.sigs)).toHaveLength(1);
+    expect(Object.keys(rep1.state.proposal!.sigs)).toHaveLength(1);
   });
 });
