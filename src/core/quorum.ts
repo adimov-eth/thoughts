@@ -1,4 +1,4 @@
-import type { Address, Quorum } from "./types";
+import type { Address, Quorum } from "../types";
 
 /**
  * Calculate the voting power of a specific address in the quorum

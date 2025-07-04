@@ -10,7 +10,7 @@ import type {
   ServerState,
   ServerInput,
   Address,
-} from "./types";
+} from "../types";
 import { applyServerFrame } from "./reducer";
 
 /* ──────────── deterministic key‑gen for demo ──────────── */

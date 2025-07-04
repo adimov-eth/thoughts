@@ -2,6 +2,7 @@
 
 import { keccak_256 as keccak } from "@noble/hashes/sha3";
 import * as rlp from "rlp";
+import { encode as rlpEncode } from "@ethereumjs/rlp";
 import type {
   Address,
   Command,
@@ -14,8 +15,8 @@ import type {
 } from "../types";
 
 /* — helpers — */
-const bnToBuf = (n: bigint) =>
-  n === 0n
+const bnToBuf = (n?: bigint) =>
+  !n || n === 0n
     ? Buffer.alloc(0)
     : Buffer.from(n.toString(16).padStart(2, "0"), "hex");
 const bufToBn = (b: Buffer): bigint =>
@@ -28,7 +29,7 @@ export const encEntityTx = (t: EntityTx): Buffer =>
       t.kind,
       bnToBuf(t.nonce),
       t.from,
-      JSON.stringify(t.data),
+      rlpEncode(t.data as any),
       t.sig,
     ]),
   );
@@ -62,7 +63,10 @@ export const encFrameForSigning = (h: FrameHeader, txs: EntityTx[]): Buffer =>
 /* — command — */
 const encCmd = (c: Command): unknown => [
   c.type,
-  JSON.stringify(c, (_, v) => (typeof v === "bigint" ? v.toString() : v)),
+  rlpEncode([
+    (c as any).type,
+    (c as any).snapshot ?? (c as any).tx ?? "",
+  ]),
 ];
 const decCmd = (a: any[]): Command => JSON.parse(a[1].toString());
 

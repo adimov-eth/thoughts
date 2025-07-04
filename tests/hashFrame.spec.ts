@@ -7,7 +7,7 @@ describe("hashFrame", () => {
     const f = mkFrame({ ts: 1 });
     const h = hashFrame(f);
     expect(h).toBe(
-      "0xc633773f3f242e9a6b277942b96a74ffbb0864ce546dd39721de85c2c21f1d5d",
+      "0x0e2264dbc867458cf3d2e6b21cc481fdaadb5321d64426943d74bcbaf1cc6704",
     );
   });
 });

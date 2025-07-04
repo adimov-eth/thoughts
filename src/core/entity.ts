@@ -17,6 +17,8 @@ import {
 
 export const hashFrameForSigning = (h: FrameHeader, txs: EntityTx[]): Hex =>
   ("0x" + bytesToHex(keccak_256(encFrameForSigning(h, txs)))) as Hex;
+export const hashFrame = (f: Frame): Hex =>
+  ("0x" + bytesToHex(keccak_256(encFrameForSigning(f.header, f.txs)))) as Hex;
 
 // Sorting Rule (Y-2): nonce → from (signerId) → kind → insertion-index (implicit)
 const sortTx = (a: EntityTx, b: EntityTx) => {
@@ -125,7 +127,12 @@ export const applyCommand = (rep: Replica, cmd: Command): Replica => {
         return rep;
       if (!thresholdReached(rep.state.proposal.sigs, rep.state.quorum))
         return rep;
-      if (!process.env.DEV_SKIP_SIGS) {
+      // DEV_SKIP_SIGS is intended for unit tests only. When set to 'true'
+      // signature verification is skipped to speed up test suites.
+      const skip = process.env.DEV_SKIP_SIGS === "true";
+      if (skip) {
+        console.warn("Signature verification disabled via DEV_SKIP_SIGS");
+      } else {
         const pubs = rep.state.quorum.members.map((m) => m.address);
         if (!verifyAggregate(cmd.hanko, proposedBlock, pubs as any))
           throw new Error("invalid hanko");
