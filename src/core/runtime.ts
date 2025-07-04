@@ -1,8 +1,8 @@
 import pino from 'pino';
 import { addr, aggregate, pub, randomPriv, sign } from '../crypto/bls';
 import { ILogger, makeLogger } from '../logging';
-import { EntityState, EntityTx, Hex, Input, Quorum, Replica, ServerState } from '../types';
-import { applyServerBlock } from './server';
+import type { EntityState, EntityTx, Input, Quorum, Replica, ServerState, ServerInput, Address } from './types';
+import { applyServerFrame } from './reducer';
 
 /* ──────────── deterministic key‑gen for demo ──────────── */
 const PRIVS = [...Array(5)].map((_,i)=>randomPriv());
@@ -13,7 +13,7 @@ const ADDRS = PUBS.map(addr);
 const genesis = ():Replica =>{
   const quorum:Quorum={
     threshold:3n,
-    members: ADDRS.map(a=>({address: a, shares:1n})),
+    members: ADDRS.map(a=>({address: a as Address, shares:1n})),
   };
   const state:EntityState={
     height: 0n,
@@ -22,12 +22,13 @@ const genesis = ():Replica =>{
     domainState: { chat: [] },
     mempool: [],
   };
-  return { state };
+  return { attached: true, state };
 };
 
 /* ──────────── runtime shell ──────────── */
 export class Runtime {
-  private state: ServerState = { replicas:new Map(), height:0n };
+  private state: ServerState = new Map();
+  private frameId: number = 0;
   private log: ILogger;
   private pending: EntityTx[] = [];
 
@@ -38,43 +39,38 @@ export class Runtime {
     ADDRS.forEach((a, i) => {
       const rep: Replica = {
         ...base,
-        // Proposer logic needs to be updated based on spec
+        // Each signer gets their own replica
       };
-      this.state.replicas.set(`demo:chat:${i}`,rep);
+      this.state.set(`${i}:chat`,rep);
     });
   }
 
   async tick(now:number, inc:Input[] = []){
-    this.log.debug('tick start', { height: this.state.height });
+    this.log.debug('tick start', { frameId: this.frameId });
     const pendingInputs = this.pending.map((tx, i) => {
       // This is a placeholder for signer index
       const signerIdx = i % ADDRS.length;
       return [signerIdx, 'chat', { type: 'addTx', tx }] as Input;
     });
     this.pending = [];
-    const batch = inc.concat(pendingInputs);
-    let { state:next, frame, outbox } =
-      applyServerBlock(this.state, batch, now);
+    const inputs = inc.concat(pendingInputs);
+    
+    const batch: ServerInput = {
+      inputId: crypto.randomUUID(),
+      frameId: this.frameId++,
+      timestamp: BigInt(now),
+      inputs
+    };
+    
+    const { next, frame } = applyServerFrame(this.state, batch, () => BigInt(now));
 
-    /* fill sig placeholders */
-    outbox = await Promise.all(outbox.map(async m=>{
-      const [signerIdx, entityId, cmd] = m;
-      if(cmd.type==='signFrame' && cmd.sig==='0x00'){
-        // Signing logic to be updated
-      }
-      if(cmd.type==='commitFrame' && cmd.hanko==='0x00'){
-        // Aggregation logic to be updated
-      }
-      return m;
-    }));
-
-    outbox.forEach(e => this.log.debug('outbox', e));
+    this.log.debug('server frame', { frameId: frame.frameId, root: frame.root });
     if (frame) {
       this.log.info('commit', { height: frame.frameId, hash: frame.root });
     }
 
     this.state = next;
-    return { outbox, frame };
+    return { frame };
   }
 
   injectClientTx(tx: EntityTx){

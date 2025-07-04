@@ -69,13 +69,46 @@ export interface ServerInput {
   frameId: number;              // monotone tick counter
   timestamp: bigint;            // unix-ms
   metaTxs: ServerMetaTx[];      // network-wide cmds (renamed per Y-1)
-  // entityInputs: EntityInput[];  // per-entity signed inputs - Placeholder for now
+  entityInputs: EntityInput[];  // per-entity signed inputs
 }
 
-export interface ServerMetaTx { // was ServerTx
-  type: 'importEntity';
+export type ServerMetaTx = // was ServerTx
+  | { type: 'importEntity'; entityId: string; data: unknown }
+  // Additional server-level transaction types can be added here
+
+export interface EntityInput {
+  jurisdictionId: string;       // format chainId:contractAddr
+  signerId: string;             // BLS public key (hex)
   entityId: string;
-  data: unknown;                // snapshot / metadata
+  quorumProof: QuorumCertificate;
+  entityTxs: EntityTx[];        // includes jurisdictionEvent txs
+  precommits: string[];         // BLS sigs over header hash
+  proposedBlock: string;        // keccak256(rlp(header ‖ txs))
+  observedInbox: InboxMessage[];
+  accountInputs: AccountInput[];
+}
+
+export interface QuorumCertificate {
+  quorumHash: string;
+  quorumStructure: string;      // reserved – must be '0x' until Phase 3
+}
+
+export interface InboxMessage {
+  msgHash: string;              // keccak256(message)
+  fromEntityId: string;
+  message: unknown;
+}
+
+export interface AccountInput {
+  counterEntityId: string;
+  channelId?: bigint;           // reserved for phase 2 multi-channel support
+  accountTxs: AccountTx[];
+}
+
+export interface AccountTx {
+  type: 'AddPaymentSubcontract';
+  paymentId: string;
+  amount: number;
 }
 
 /* ─── 4.8 Server Frame (global timeline) ─── */

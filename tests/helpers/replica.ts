@@ -1,17 +1,25 @@
-import { Replica, Frame, EntityState, Quorum, Address } from '../../src/types'
+import type { Replica, EntityState, Quorum, Address } from '../../src/core/types'
 
 export const createBlankReplica = (): Replica => {
-  const members: Record<Address, { nonce: bigint; shares: number }> = {
-    'signer-0': { nonce: 0n, shares: 1 },
-  } as any
-  const quorum: Quorum = { threshold: 1, members }
-  const state: EntityState = { quorum, chat: [] }
-  const frame: Frame<EntityState> = { height: 0n, ts: 0, txs: [], state }
-  return {
-    address: { jurisdiction: 'demo', entityId: 'chat' },
-    proposer: 'signer-0' as Address,
-    isAwaitingSignatures: false,
+  const quorum: Quorum = {
+    threshold: 1n,
+    members: [
+      { address: '0x0000000000000000000000000000000000000001' as Address, shares: 1n }
+    ]
+  }
+  
+  const state: EntityState = {
+    height: 0n,
+    quorum,
+    signerRecords: {
+      '0x0000000000000000000000000000000000000001': { nonce: 0n }
+    },
+    domainState: { chat: [] },
     mempool: [],
-    last: frame,
+  }
+  
+  return {
+    attached: true,
+    state
   }
 }
