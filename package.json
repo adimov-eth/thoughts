@@ -27,7 +27,7 @@
     "keccak256": "^1.0.6",
     "pino": "^9.7.0",
     "pino-pretty": "^13.0.0",
-    "safe-stable-stringify": "^2.5.0",
+    "@ethereumjs/rlp": "^4.0.0",
     "uint8arrays": "^5.1.0"
   }
 }

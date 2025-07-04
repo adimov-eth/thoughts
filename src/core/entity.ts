@@ -17,6 +17,8 @@ import {
 
 export const hashFrameForSigning = (h: FrameHeader, txs: EntityTx[]): Hex =>
   ("0x" + bytesToHex(keccak_256(encFrameForSigning(h, txs)))) as Hex;
+export const hashFrame = (f: Frame): Hex =>
+  ("0x" + bytesToHex(keccak_256(encFrameForSigning(f.header, f.txs)))) as Hex;
 
 // Sorting Rule (Y-2): nonce → from (signerId) → kind → insertion-index (implicit)
 const sortTx = (a: EntityTx, b: EntityTx) => {

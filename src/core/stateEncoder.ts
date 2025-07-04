@@ -3,7 +3,7 @@ import type {
   Input,
   Command,
   EntityTx,
-} from "./types";
+} from "../types";
 import type { Input as RlpInput } from "rlp";
 
 /**
