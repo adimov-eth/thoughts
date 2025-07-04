@@ -4,5 +4,6 @@
  */
 
 export { applyServerFrame } from "./reducer";
+export { applyServerFrame as applyServerBlock } from "./reducer";
 export { computeServerRoot, computeInputsRoot } from "./hash";
 export type { ServerState, ServerFrame, ServerInput } from "../types";

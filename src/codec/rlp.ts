@@ -29,7 +29,7 @@ export const encEntityTx = (t: EntityTx): Buffer =>
       t.kind,
       bnToBuf(t.nonce),
       t.from,
-      rlpEncode(t.data as any),
+      rlpEncode(Buffer.from(JSON.stringify(t.data)) as any),
       t.sig,
     ]),
   );

@@ -3,7 +3,7 @@ import { applyCommand } from "../src/core/reducer";
 import { randomPriv, pub, addr } from "../src/crypto/bls";
 import { bls12_381 as bls } from "@noble/curves/bls12-381";
 import { hashFrame } from "../src/core/hash";
-import type { Replica, Command, Quorum, Address, FrameHeader } from "../src/core/types";
+import type { Replica, Command, Quorum, Address, FrameHeader } from "../src/types";
 
 describe("BLS signature recovery in signFrame", () => {
   it("identifies signer from BLS signature", async () => {
