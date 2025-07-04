@@ -19,7 +19,9 @@
       "Bash(grep:*)",
       "Bash(rm:*)",
       "Bash(git rebase:*)",
-      "Bash(npm run test:*)"
+      "Bash(npm run test:*)",
+      "Bash(bun:*)",
+      "Bash(git reset:*)"
     ],
     "deny": []
   }
