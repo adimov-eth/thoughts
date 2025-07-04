@@ -21,7 +21,8 @@
       "Bash(git rebase:*)",
       "Bash(npm run test:*)",
       "Bash(bun:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }
