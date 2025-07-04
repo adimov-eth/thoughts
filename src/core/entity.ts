@@ -1,6 +1,6 @@
 import { keccak_256 } from '@noble/hashes/sha3';
 import { bytesToHex } from '@noble/hashes/utils';
-import { encFrameHeader } from '../codec/rlp';
+import { encFrameForSigning } from '../codec/rlp';
 import { verifyAggregate } from '../crypto/bls';
 import {
   Address,
@@ -15,13 +15,16 @@ import {
   Replica
 } from '../types';
 
-export const hashFrameHeader = (h: FrameHeader): Hex =>
-  ('0x' + bytesToHex(keccak_256(encFrameHeader(h)))) as Hex;
+export const hashFrameForSigning = (h: FrameHeader, txs: EntityTx[]): Hex =>
+  ('0x' + bytesToHex(keccak_256(encFrameForSigning(h, txs)))) as Hex;
 
-const sortTx = (a: EntityTx, b: EntityTx) =>
-  a.nonce !== b.nonce ? (a.nonce < b.nonce ? -1 : 1)
-  : a.sig  !== b.sig ? (a.sig  < b.sig  ? -1 : 1)
-  : 0;
+// Sorting Rule (Y-2): nonce → from (signerId) → kind → insertion-index (implicit)
+const sortTx = (a: EntityTx, b: EntityTx) => {
+  if (a.nonce !== b.nonce) return a.nonce < b.nonce ? -1 : 1;
+  if (a.from !== b.from) return a.from < b.from ? -1 : 1;
+  if (a.kind !== b.kind) return a.kind < b.kind ? -1 : 1;
+  return 0;
+}
 
 const sharesOf = (addr: Address, q: Quorum) => {
   const member = q.members.find(m => m.address === addr);
@@ -34,29 +37,30 @@ const power = (sigs: Record<string, string>, q: Quorum) =>
 const thresholdReached = (sigs: Record<string, string>, q: Quorum) =>
   power(sigs, q) >= q.threshold;
 
-/* ──────────── domain logic: chat ──────────── */
+/* ─────────���── domain logic: chat ──────────── */
 export const applyTx = (
   st: EntityState, tx: EntityTx
 ): EntityState => {
   if (tx.kind !== 'chat') throw new Error('unknown tx kind');
-  const signerAddress = tx.sig; // This is incorrect, need to recover from sig
-  const rec = st.signerRecords[signerAddress];
+  // Note: tx.from is now available, assuming it's recovered from the signature
+  const rec = st.signerRecords[tx.from];
   if (!rec) throw new Error('unknown signer');
   if (tx.nonce !== rec.nonce) throw new Error('bad nonce');
 
   const signerRecords = {
     ...st.signerRecords,
-    [signerAddress]: { nonce: rec.nonce + 1n },
+    [tx.from]: { nonce: rec.nonce + 1n },
   };
 
-  const chatMessage = { from: signerAddress, msg: tx.data.message, ts: Date.now() };
+  const chatMessage = { from: tx.from, msg: (tx.data as any).message, ts: Date.now() };
 
+  const domainState = st.domainState as { chat: any[] };
   return {
     ...st,
     signerRecords,
     domainState: {
-      ...st.domainState,
-      chat: [...st.domainState.chat, chatMessage],
+      ...domainState,
+      chat: [...domainState.chat, chatMessage],
     },
   };
 };
@@ -84,6 +88,7 @@ export const execFrame = (
 export const applyCommand = (rep: Replica, cmd: Command): Replica => {
   switch (cmd.type) {
     case 'addTx':
+      // It's assumed that the `from` field is populated before calling this.
       return {
         ...rep,
         state: {
@@ -106,12 +111,13 @@ export const applyCommand = (rep: Replica, cmd: Command): Replica => {
 
     case 'commitFrame': {
       if (!rep.state.proposal) return rep;
-      if (hashFrameHeader(cmd.frame.header) !== hashFrameHeader(rep.state.proposal.header)) return rep;
+      const proposedBlock = hashFrameForSigning(rep.state.proposal.header, cmd.frame.txs);
+      if (hashFrameForSigning(cmd.frame.header, cmd.frame.txs) !== proposedBlock) return rep;
       if (!thresholdReached(rep.state.proposal.sigs, rep.state.quorum))
         return rep;
       if (!process.env.DEV_SKIP_SIGS) {
         const pubs = rep.state.quorum.members.map(m => m.address);
-        if (!verifyAggregate(cmd.hanko, hashFrameHeader(cmd.frame.header), pubs as any))
+        if (!verifyAggregate(cmd.hanko, proposedBlock, pubs as any))
           throw new Error('invalid hanko');
       }
       const newState: EntityState = {

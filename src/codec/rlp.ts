@@ -3,6 +3,7 @@
 import { keccak_256 as keccak } from '@noble/hashes/sha3';
 import * as rlp from 'rlp';
 import type {
+  Address,
   Command,
   EntityTx,
   Frame,
@@ -21,13 +22,14 @@ const bufToBn = (b: Buffer): bigint =>
 
 /* — EntityTx — */
 export const encEntityTx = (t: EntityTx): Buffer => Buffer.from(rlp.encode([
-  t.kind, bnToBuf(t.nonce), JSON.stringify(t.data), t.sig,
+  t.kind, bnToBuf(t.nonce), t.from, JSON.stringify(t.data), t.sig,
 ]));
 export const decEntityTx = (b: Buffer): EntityTx => {
-  const [k, n, data, sig] = rlp.decode(b) as Buffer[];
+  const [k, n, from, data, sig] = rlp.decode(b) as Buffer[];
   return {
     kind : k.toString(),
     nonce: bufToBn(n),
+    from: `0x${from.toString('hex')}` as Address,
     data : JSON.parse(data.toString()),
     sig  : `0x${sig.toString('hex')}`,
   } as EntityTx;
@@ -41,16 +43,13 @@ export const encFrameHeader = (h: FrameHeader): Buffer => Buffer.from(rlp.encode
   h.prevStateRoot,
   h.proposer,
 ]));
-export const decFrameHeader = (b: Buffer): FrameHeader => {
-  const [entityId, height, memRoot, prevStateRoot, proposer] = rlp.decode(b) as any[];
-  return {
-    entityId: entityId.toString(),
-    height: bufToBn(height),
-    memRoot: memRoot.toString(),
-    prevStateRoot: prevStateRoot.toString(),
-    proposer: proposer.toString(),
-  };
-};
+
+/* — Frame For Signing — */
+export const encFrameForSigning = (h: FrameHeader, txs: EntityTx[]): Buffer => Buffer.from(rlp.encode([
+  encFrameHeader(h),
+  txs.map(encEntityTx),
+]));
+
 
 /* — command — */
 const encCmd = (c: Command): unknown => [c.type, JSON.stringify(c, (_,v)=>typeof v==='bigint'? v.toString():v)];
