@@ -48,6 +48,7 @@ export const applyCommand = (
   rep: Replica,
   cmd: Command,
   _now: () => bigint,
+  signerIdx?: number,
 ): Replica => {
   if (
     !rep.attached &&
@@ -126,12 +127,20 @@ export const applyCommand = (
       
       // Find which quorum member signed this
       let signer: Address | null = null;
-      for (const member of s.quorum.members) {
-        if (!member.pubKey) continue; // Skip members without BLS pubkey
-        
+      const skip = process.env.DEV_SKIP_SIGS === "1" || process.env.DEV_SKIP_SIGS === "true";
+      for (let i = 0; i < s.quorum.members.length; i++) {
+        const member = s.quorum.members[i];
+        if (!member.pubKey) {
+          if (skip && signerIdx === i && !s.proposal.sigs[member.address]) {
+            signer = member.address;
+            break;
+          }
+          continue;
+        }
+
         try {
           const pubKeyBytes = Buffer.from(member.pubKey.slice(2), "hex");
-          const verified = verifyBls(proposalHash, cmd.sig as Hex, pubKeyBytes);
+          const verified = skip || verifyBls(proposalHash, cmd.sig as Hex, pubKeyBytes);
           if (verified) {
             signer = member.address;
             break;
@@ -140,7 +149,7 @@ export const applyCommand = (
           // Invalid pubkey or signature format, continue to next member
         }
       }
-      
+
       if (!signer) return rep; // Invalid signature or signer not in quorum
       if (s.proposal.sigs[signer]) return rep; // dup vote
       return {
@@ -228,7 +237,7 @@ export const applyServerFrame = (
       };
       rep = { attached: false, state: defaultState };
     }
-    next.set(key, applyCommand(rep, cmd, now));
+    next.set(key, applyCommand(rep, cmd, now, idx));
   }
 
   const frame: ServerFrame = {

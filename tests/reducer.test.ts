@@ -9,7 +9,7 @@ import type {
   EntityTx,
   Command,
   Address,
-} from "../src/core/types";
+} from "../src/types";
 import { createChatTx } from "./helpers/tx";
 import { signerKeyPair } from "./helpers/crypto";
 

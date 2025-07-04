@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { applyServerFrame } from "../core/reducer";
-import type { ServerInput, ServerState } from "../core/types";
+import type { ServerInput, ServerState } from "../types";
 
 let state: ServerState = new Map();
 let frameId = 0;

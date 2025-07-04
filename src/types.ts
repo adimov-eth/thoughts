@@ -60,7 +60,7 @@ export interface EntityState {
 /* ─── 4.6 Quorum Definition ─── */
 export interface Quorum {
   threshold: bigint; // required weight
-  members: { address: string; shares: bigint }[];
+  members: { address: string; shares: bigint; pubKey?: string }[];
 }
 
 /* ─── 4.7 Server-input Batch ─── */
@@ -123,10 +123,8 @@ export interface ServerFrame {
 /* ─── Additional runtime types (not in spec data model) ─── */
 
 export interface Replica {
+  attached: boolean;
   state: EntityState;
 }
 
-export interface ServerState {
-  height: bigint;
-  replicas: Map<string, Replica>;
-}
+export type ServerState = Map<`${number}:${string}`, Replica>;
