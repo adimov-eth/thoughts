@@ -1,4 +1,4 @@
-import type { EntityTx, FrameHeader, EntityState } from "./types";
+import type { EntityTx, FrameHeader, EntityState } from "../types";
 import { hashFrame } from "./hash";
 
 /**

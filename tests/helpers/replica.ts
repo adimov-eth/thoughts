@@ -3,7 +3,7 @@ import type {
   EntityState,
   Quorum,
   Address,
-} from "../../src/core/types";
+} from "../../src/types";
 
 export const createBlankReplica = (): Replica => {
   const quorum: Quorum = {

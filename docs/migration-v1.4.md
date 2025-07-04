@@ -6,7 +6,7 @@ This guide helps you migrate from XLN v1.3 to v1.4.1-RC2, which introduces signi
 
 ### Breaking Changes
 
-1. **New Type System** (`src/core/types.ts`)
+1. **New Type System** (`src/types.ts`)
    - Complete rewrite of core types to match v1.4.1-RC2 specification
    - `EntityTx` now includes mandatory `from` field (signer address)
    - New `ServerInput` and `ServerFrame` types for batch processing
@@ -54,7 +54,7 @@ Replace old type imports:
 import { EntityTx, Frame } from "../types";
 
 // After
-import { EntityTx, Frame } from "../core/types";
+import { EntityTx, Frame } from "../types";
 ```
 
 ### 2. Add `from` Field to EntityTx

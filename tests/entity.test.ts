@@ -9,7 +9,7 @@ import type {
   ServerInput,
   Address,
   EntityTx,
-} from "../src/core/types";
+} from "../src/types";
 import { createChatTx } from "./helpers/tx";
 
 describe("Entity-level state machine", () => {
