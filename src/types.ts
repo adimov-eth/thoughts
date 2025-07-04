@@ -1,98 +1,85 @@
-/* ──────────── primitive brands ──────────── */
-export type Hex     = `0x${string}`;
+/* ─── Canonical Data Model from spec/v1.4.1 ─── */
+
+/* ─── Primitives ─── */
+export type Hex = `0x${string}`;
 export type Address = Hex;
-export type UInt64  = bigint;          // big‑endian, left‑stripped
-export type Nonce   = UInt64;
-export type TS      = number;          // ms‑since‑epoch
+export type Hanko = Hex; // 48-byte BLS aggregate signature
 
-/* ──────────── signer & quorum ──────────── */
-export interface SignerRecord {
-  nonce : Nonce;
-  shares: number;                      // voting power
-}
-export interface Quorum {
-  threshold: number;                   // ≥ Σ(shares) to commit
-  members  : Record<Address, SignerRecord>;
-}
+/* ─── 4.1 Wire Envelope ─── */
+export type Input = [
+  signerIdx: number,   // index in lexicographically-sorted signerId list for this tick
+  entityId: string,    // target Entity
+  cmd: Command         // consensus-level command
+];
 
-/* ──────────── entity state ──────────── */
-export interface EntityState {
-  quorum: Quorum;
-  chat : { from: Address; msg: string; ts: TS }[];
-}
-
-/* ──────────── transactions ──────────── */
-export type TxKind = 'chat';
-export interface BaseTx<K extends TxKind = TxKind> {
-  kind : K;
-  nonce: Nonce;
-  from : Address;
-  body : unknown;
-  sig  : Hex;                          // BLS12‑381 sig (single)
-}
-export type ChatTx      = BaseTx<'chat'> & { body:{ message:string } };
-export type Transaction = ChatTx;
-
-/* ──────────── frames ──────────── */
-export interface Frame<T = unknown> {
-  height: UInt64;
-  ts    : TS;
-  txs   : Transaction[];
-  state : T;
-}
-export interface ProposedFrame<T = unknown> extends Frame<T> {
-  sigs: Map<Address, Hex>;             // individual sigs
-  hash: Hex;                           // hash(frame)
-}
-export type Hanko = Hex;               // aggregate BLS sig, 48 B
-
-/* ──────────── replica addressing ──────────── */
-export interface ReplicaAddr {
-  jurisdiction: string;
-  entityId    : string;
-  signerId?   : string;
-}
-export const addrKey = (a: ReplicaAddr) =>
-  `${a.jurisdiction}:${a.entityId}`;
-
-/* ──────────── replica runtime view ──────────── */
-export interface Replica {
-  address             : ReplicaAddr;
-  proposer            : Address;
-  isAwaitingSignatures: boolean;
-  mempool             : Transaction[];
-  last                : Frame<EntityState>;
-  proposal?           : ProposedFrame<EntityState>;
-}
-
-/* ──────────── server‑level commands ──────────── */
+/* ─── 4.2 Consensus-level Commands ─── */
 export type Command =
-  | { type:'IMPORT' ; replica: Replica }
-  | { type:'ADD_TX' ; addrKey: string; tx: Transaction }
-  | { type:'PROPOSE'; addrKey: string; ts: TS }
-  | { type:'SIGN'   ; addrKey: string; signer: Address;
-                      frameHash: Hex; sig: Hex }
-  | { type:'COMMIT' ; addrKey: string; hanko: Hanko;
-                      frame: Frame<EntityState> };
+  | { type: 'importEntity'; snapshot: EntityState }
+  | { type: 'addTx';        tx: EntityTx }
+  // proposer MUST include FrameHeader so replicas verify deterministically
+  | { type: 'proposeFrame'; header: FrameHeader }
+  | { type: 'signFrame';    sig: string }
+  | { type: 'commitFrame';  frame: Frame; hanko: Hanko };
 
-/* ──────────── wire envelope (transport‑neutral) ──────────── */
-export interface Input {
-  from: Address;
-  to  : Address;
-  cmd : Command;
+/* ─── 4.3 Application-level Transaction ─── */
+export type EntityTx = {
+  kind: string;    // e.g. 'chat', 'transfer', 'jurisdictionEvent'
+  data: any;       // payload
+  nonce: bigint;   // per-signer monotone counter
+  sig: string;     // signer’s signature over RLP(tx)
+};
+
+/* ─── 4.4 Frame ≃ block at Entity level ─── */
+export type Frame = {
+  height: bigint;           // sequential frame number
+  timestamp: bigint;        // unix-ms at creation (bigint for 64-bit safety)
+  header: FrameHeader;      // static fields hashed for propose/sign
+  txs: EntityTx[];          // ordered transactions
+  postStateRoot: string;    // keccak256 of EntityState after txs
+};
+
+export type FrameHeader = {
+  entityId: string;
+  height: bigint;
+  memRoot: string;          // Merkle root of tx list
+  prevStateRoot: string;
+  proposer: string;         // signerId that built the frame
+};
+
+/* ─── 4.5 Entity State ─── */
+export type EntityState = {
+  height: bigint;                              // last committed height
+  quorum: Quorum;                              // active quorum
+  signerRecords: Record<string, { nonce: bigint }>;
+  domainState: any;                            // application domain data
+  mempool: EntityTx[];                         // pending txs
+  proposal?: { header: FrameHeader; sigs: Record<string, string> };
+};
+
+/* ─── 4.6 Quorum Definition ─── */
+export type Quorum = {
+  threshold: bigint;                           // required weight
+  members: { address: string; shares: bigint }[];
+};
+
+/* ─── 4.8 Server Frame Header (global timeline) ─── */
+export type ServerFrame = {
+  frameId: number;
+  timestamp: bigint;
+  root: string;                 // Merkle root of replica state hashes
+  inputsRoot: string;           // Merkle root of RLP(ServerInput)
+};
+
+/* ─── Additional runtime types (not in spec data model) ─── */
+
+export interface Replica {
+  // TBD: This needs to be reconciled with the new spec.
+  // For now, we'll keep a minimal version to allow compilation.
+  state: EntityState;
 }
 
-/* ──────────── server frame ──────────── */
-export interface ServerFrame {
-  height: UInt64;   // ++ each tick
-  ts    : TS;       // wall-clock timestamp
-  inputs: Input[];  // executed inputs
-  root  : Hex;      // Merkle root of snapshots
-  hash  : Hex;      // keccak256(rlp(ServerFrame without hash))
-}
-
-/* ──────────── server state ──────────── */
 export interface ServerState {
-  height  : UInt64;                     // last committed ServerFrame.height
-  replicas: Map<string, Replica>;       // key = addrKey:signer
+  // TBD: This needs to be reconciled with the new spec.
+  height: bigint;
+  replicas: Map<string, Replica>;
 }

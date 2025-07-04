@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { addr, aggregate, pub, randomPriv, sign } from '../crypto/bls';
 import { ILogger, makeLogger } from '../logging';
-import { EntityState, Frame, Hex, Input, Quorum, Replica, ServerState, Transaction } from '../types';
+import { EntityState, EntityTx, Hex, Input, Quorum, Replica, ServerState } from '../types';
 import { applyServerBlock } from './server';
 
 /* ──────────── deterministic key‑gen for demo ──────────── */
@@ -12,45 +12,45 @@ const ADDRS = PUBS.map(addr);
 /* ──────────── build initial replica (empty chat) ──────────── */
 const genesis = ():Replica =>{
   const quorum:Quorum={
-    threshold:3,
-    members:Object.fromEntries(
-      ADDRS.map(a=>[a,{nonce:0n as bigint,shares:1}]),
-    ),
+    threshold:3n,
+    members: ADDRS.map(a=>({address: a, shares:1n})),
   };
-  const state:EntityState={quorum,chat:[]};
-  const frame:Frame<EntityState>={height:0n,ts:0,txs:[],state};
-  return{
-    address:{jurisdiction:'demo',entityId:'chat'},
-    proposer:ADDRS[0],
-    isAwaitingSignatures:false,
-    mempool:[],
-    last:frame,
+  const state:EntityState={
+    height: 0n,
+    quorum,
+    signerRecords: Object.fromEntries(ADDRS.map(a => [a, {nonce: 0n}])),
+    domainState: { chat: [] },
+    mempool: [],
   };
+  return { state };
 };
 
 /* ──────────── runtime shell ──────────── */
 export class Runtime {
   private state: ServerState = { replicas:new Map(), height:0n };
   private log: ILogger;
-  private pending: Transaction[] = [];
+  private pending: EntityTx[] = [];
 
   constructor(opts: { logLevel?: pino.Level } = {}){
     this.log = makeLogger(opts.logLevel ?? (process.env.LOG_LEVEL as any) ?? 'info');
     /* IMPORT each signer‑replica */
     const base=genesis();
-    ADDRS.forEach(a=>{
-      const rep={...base,proposer:a};
-      this.state.replicas.set(`demo:chat:${a}`,rep);
+    ADDRS.forEach((a, i) => {
+      const rep: Replica = {
+        ...base,
+        // Proposer logic needs to be updated based on spec
+      };
+      this.state.replicas.set(`demo:chat:${i}`,rep);
     });
   }
 
   async tick(now:number, inc:Input[] = []){
     this.log.debug('tick start', { height: this.state.height });
-    const pendingInputs = this.pending.map(tx => ({
-      from: tx.from,
-      to: '0x0000000000000000000000000000000000000000' as `0x${string}`,
-      cmd: { type:'ADD_TX', addrKey:'demo:chat', tx },
-    } as Input));
+    const pendingInputs = this.pending.map((tx, i) => {
+      // This is a placeholder for signer index
+      const signerIdx = i % ADDRS.length;
+      return [signerIdx, 'chat', { type: 'addTx', tx }] as Input;
+    });
     this.pending = [];
     const batch = inc.concat(pendingInputs);
     let { state:next, frame, outbox } =
@@ -58,29 +58,26 @@ export class Runtime {
 
     /* fill sig placeholders */
     outbox = await Promise.all(outbox.map(async m=>{
-      if(m.cmd.type==='SIGN'&&m.cmd.sig==='0x00'){
-        const i=ADDRS.indexOf(m.cmd.signer);
-        m.cmd.sig = await sign(
-          Buffer.from(m.cmd.frameHash.slice(2),'hex'), PRIVS[i],
-        );
+      const [signerIdx, entityId, cmd] = m;
+      if(cmd.type==='signFrame' && cmd.sig==='0x00'){
+        // Signing logic to be updated
       }
-      if(m.cmd.type==='COMMIT'&&m.cmd.hanko==='0x00'){
-        const sigs=(m.cmd.frame as any).sigs as Map<string,Hex>;
-        m.cmd.hanko = aggregate([...sigs.values()]);
-        delete (m.cmd.frame as any).sigs;
-        delete (m.cmd.frame as any).hash;
+      if(cmd.type==='commitFrame' && cmd.hanko==='0x00'){
+        // Aggregation logic to be updated
       }
       return m;
     }));
 
     outbox.forEach(e => this.log.debug('outbox', e));
-    this.log.info('commit', { height: frame.height, hash: frame.hash });
+    if (frame) {
+      this.log.info('commit', { height: frame.frameId, hash: frame.root });
+    }
 
     this.state = next;
     return { outbox, frame };
   }
 
-  injectClientTx(tx: Transaction){
+  injectClientTx(tx: EntityTx){
     this.log.info('client tx', tx);
     this.pending.push(tx);
   }

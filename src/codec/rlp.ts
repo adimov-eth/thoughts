@@ -4,49 +4,51 @@ import { keccak_256 as keccak } from '@noble/hashes/sha3';
 import * as rlp from 'rlp';
 import type {
   Command,
+  EntityTx,
   Frame,
+  FrameHeader,
   Hex,
   Input,
   ServerFrame,
-  Transaction, TxKind,
-  UInt64,
 } from '../types';
 
 /* — helpers — */
-const bnToBuf = (n: UInt64) =>
+const bnToBuf = (n: bigint) =>
   n === 0n ? Buffer.alloc(0)
            : Buffer.from(n.toString(16).padStart(2, '0'), 'hex');
-const bufToBn = (b: Buffer): UInt64 =>
+const bufToBn = (b: Buffer): bigint =>
   b.length === 0 ? 0n : BigInt('0x' + b.toString('hex'));
 
-/* — tx — */
-export const encTx = (t: Transaction): Buffer => Buffer.from(rlp.encode([
-  t.kind, bnToBuf(t.nonce), t.from, JSON.stringify(t.body), t.sig,
+/* — EntityTx — */
+export const encEntityTx = (t: EntityTx): Buffer => Buffer.from(rlp.encode([
+  t.kind, bnToBuf(t.nonce), JSON.stringify(t.data), t.sig,
 ]));
-export const decTx = (b: Buffer): Transaction => {
-  const [k, n, f, body, sig] = rlp.decode(b) as Buffer[];
+export const decEntityTx = (b: Buffer): EntityTx => {
+  const [k, n, data, sig] = rlp.decode(b) as Buffer[];
   return {
-    kind : k.toString() as TxKind,
+    kind : k.toString(),
     nonce: bufToBn(n),
-    from : `0x${f.toString('hex')}`,
-    body : JSON.parse(body.toString()),
+    data : JSON.parse(data.toString()),
     sig  : `0x${sig.toString('hex')}`,
-  } as Transaction;
+  } as EntityTx;
 };
 
-/* — frame — */
-export const encFrame = <S>(f: Frame<S>): Buffer => Buffer.from(rlp.encode([
-  bnToBuf(f.height),
-  f.ts,
-  f.txs.map(encTx),
-  rlp.encode(JSON.stringify(f.state, (_,v)=>typeof v==='bigint'? v.toString():v)),
+/* — FrameHeader — */
+export const encFrameHeader = (h: FrameHeader): Buffer => Buffer.from(rlp.encode([
+  h.entityId,
+  bnToBuf(h.height),
+  h.memRoot,
+  h.prevStateRoot,
+  h.proposer,
 ]));
-export const decFrame = <S>(b: Buffer): Frame<S> => {
-  const [h, ts, txs, st] = rlp.decode(b) as any[];
+export const decFrameHeader = (b: Buffer): FrameHeader => {
+  const [entityId, height, memRoot, prevStateRoot, proposer] = rlp.decode(b) as any[];
   return {
-    height: bufToBn(h), ts:Number(ts.toString()),
-    txs:(txs as Buffer[]).map(decTx),
-    state:JSON.parse(rlp.decode(st).toString()) as S,
+    entityId: entityId.toString(),
+    height: bufToBn(height),
+    memRoot: memRoot.toString(),
+    prevStateRoot: prevStateRoot.toString(),
+    proposer: proposer.toString(),
   };
 };
 
@@ -56,29 +58,28 @@ const decCmd = (a:any[]): Command   => JSON.parse(a[1].toString());
 
 /* — input — */
 export const encInput = (i: Input): Buffer =>
-  Buffer.from(rlp.encode([i.from, i.to, encCmd(i.cmd) as any]));
+  Buffer.from(rlp.encode([i[0], i[1], encCmd(i[2]) as any]));
 export const decInput = (b: Buffer): Input => {
-  const [f,t,c] = rlp.decode(b) as any[];
-  return { from:f.toString(), to:t.toString(), cmd:decCmd(c) } as Input;
+  const [signerIdx, entityId, cmd] = rlp.decode(b) as any[];
+  return [signerIdx, entityId, decCmd(cmd)] as Input;
 };
 
 /* — server frame — */
 export const encServerFrame = (f: ServerFrame): Buffer =>
   Buffer.from(rlp.encode([
-    bnToBuf(f.height), f.ts,
-    f.inputs.map(encInput),
+    f.frameId,
+    bnToBuf(f.timestamp),
+    f.inputsRoot,
     f.root,
   ]));
 
 export const decServerFrame = (b: Buffer): ServerFrame => {
-  const [h, ts, ins, root] = rlp.decode(b) as any[];
+  const [frameId, timestamp, inputsRoot, root] = rlp.decode(b) as any[];
   const frame: ServerFrame = {
-    height: bufToBn(h),
-    ts: Number(ts.toString()),
-    inputs: (ins as Buffer[]).map(decInput),
-    root: `0x${root.toString('hex')}` as Hex,
-    hash: '0x00' as Hex,
+    frameId: Number(frameId.toString()),
+    timestamp: bufToBn(timestamp),
+    inputsRoot: inputsRoot.toString(),
+    root: root.toString(),
   };
-  frame.hash = ('0x' + Buffer.from(keccak(encServerFrame(frame))).toString('hex')) as Hex;
   return frame;
 };

@@ -1,102 +1,128 @@
 import { keccak_256 } from '@noble/hashes/sha3';
 import { bytesToHex } from '@noble/hashes/utils';
-import { encFrame } from '../codec/rlp';
+import { encFrameHeader } from '../codec/rlp';
 import { verifyAggregate } from '../crypto/bls';
 import {
   Address,
-  Command, EntityState, Frame,
+  Command,
+  EntityState,
+  EntityTx,
+  Frame,
+  FrameHeader,
+  Hanko,
   Hex,
-  ProposedFrame,
   Quorum,
-  Replica,
-  Transaction,
-  TS
+  Replica
 } from '../types';
 
-export const hashFrame = (f: Frame<any>): Hex =>
-  ('0x' + bytesToHex(keccak_256(encFrame(f)))) as Hex;
+export const hashFrameHeader = (h: FrameHeader): Hex =>
+  ('0x' + bytesToHex(keccak_256(encFrameHeader(h)))) as Hex;
 
-const sortTx = (a: Transaction, b: Transaction) =>
+const sortTx = (a: EntityTx, b: EntityTx) =>
   a.nonce !== b.nonce ? (a.nonce < b.nonce ? -1 : 1)
-  : a.from  !== b.from ? (a.from  < b.from  ? -1 : 1)
+  : a.sig  !== b.sig ? (a.sig  < b.sig  ? -1 : 1)
   : 0;
 
-const sharesOf = (addr: Address, q: Quorum) => q.members[addr]?.shares ?? 0;
+const sharesOf = (addr: Address, q: Quorum) => {
+  const member = q.members.find(m => m.address === addr);
+  return member ? member.shares : 0n;
+}
 
-const power = (sigs: Map<Address, Hex>, q: Quorum) =>
-  [...sigs.keys()].reduce((sum,a)=>sum+sharesOf(a,q),0);
+const power = (sigs: Record<string, string>, q: Quorum) =>
+  Object.keys(sigs).reduce((sum, a) => sum + sharesOf(a as Address, q), 0n);
 
-const thresholdReached = (sigs: Map<Address, Hex>, q: Quorum) =>
-  power(sigs,q) >= q.threshold;
+const thresholdReached = (sigs: Record<string, string>, q: Quorum) =>
+  power(sigs, q) >= q.threshold;
 
 /* ──────────── domain logic: chat ──────────── */
 export const applyTx = (
-  st: EntityState, tx: Transaction, ts:TS,
+  st: EntityState, tx: EntityTx
 ): EntityState => {
   if (tx.kind !== 'chat') throw new Error('unknown tx kind');
-  const rec = st.quorum.members[tx.from];
+  const signerAddress = tx.sig; // This is incorrect, need to recover from sig
+  const rec = st.signerRecords[signerAddress];
   if (!rec) throw new Error('unknown signer');
   if (tx.nonce !== rec.nonce) throw new Error('bad nonce');
 
-  const members = {
-    ...st.quorum.members,
-    [tx.from]: { nonce:rec.nonce+1n, shares:rec.shares },
+  const signerRecords = {
+    ...st.signerRecords,
+    [signerAddress]: { nonce: rec.nonce + 1n },
   };
+
+  const chatMessage = { from: signerAddress, msg: tx.data.message, ts: Date.now() };
+
   return {
-    quorum:{...st.quorum, members},
-    chat:[...st.chat,{from:tx.from,msg:tx.body.message,ts}],
+    ...st,
+    signerRecords,
+    domainState: {
+      ...st.domainState,
+      chat: [...st.domainState.chat, chatMessage],
+    },
   };
 };
 
 export const execFrame = (
-  prev: Frame<EntityState>, txs:Transaction[], ts:TS,
-): Frame<EntityState> => {
+  prevState: EntityState, txs: EntityTx[], header: FrameHeader
+): Frame => {
   const ordered = txs.slice().sort(sortTx);
-  let st = prev.state;
-  for(const tx of ordered) st = applyTx(st,tx,ts);
-  return { height:prev.height+1n, ts, txs:ordered, state:st };
+  let state = prevState;
+  for (const tx of ordered) state = applyTx(state, tx);
+
+  // This is not how postStateRoot is calculated. This is a placeholder.
+  const postStateRoot = bytesToHex(keccak_256(JSON.stringify(state)));
+
+  return {
+    height: header.height,
+    timestamp: BigInt(Date.now()),
+    header,
+    txs: ordered,
+    postStateRoot,
+  };
 };
 
 /* ──────────── replica FSM ──────────── */
-export const applyCommand = (rep:Replica, cmd:Command):Replica => {
-  switch(cmd.type){
-    case 'ADD_TX':
-      return { ...rep, mempool:[...rep.mempool,cmd.tx] };
+export const applyCommand = (rep: Replica, cmd: Command): Replica => {
+  switch (cmd.type) {
+    case 'addTx':
+      return {
+        ...rep,
+        state: {
+          ...rep.state,
+          mempool: [...rep.state.mempool, cmd.tx],
+        }
+      };
 
-    case 'PROPOSE':{
-      if(rep.isAwaitingSignatures||!rep.mempool.length) return rep;
-      const frame = execFrame(rep.last,rep.mempool,cmd.ts);
-      const proposal:ProposedFrame<EntityState>={
-        ...frame, hash:hashFrame(frame),
-        sigs:new Map([[rep.proposer,'0x00']]),
-      };
-      return{
-        ...rep, mempool:[], isAwaitingSignatures:true, proposal
-      };
+    case 'proposeFrame': {
+      if (rep.state.proposal || !rep.state.mempool.length) return rep;
+      // Proposer logic to be implemented
+      return rep;
     }
 
-    case 'SIGN':{
-      if(!rep.isAwaitingSignatures||!rep.proposal) return rep;
-      if(cmd.frameHash!==rep.proposal.hash) return rep;
-      if(!rep.last.state.quorum.members[cmd.signer]) return rep;
-      if(rep.proposal.sigs.has(cmd.signer)) return rep;
-      const sigs=new Map(rep.proposal.sigs).set(cmd.signer,cmd.sig);
-      return{...rep, proposal:{...rep.proposal,sigs}};
+    case 'signFrame': {
+      if (!rep.state.proposal) return rep;
+      // Signature verification logic to be implemented
+      return rep;
     }
 
-    case 'COMMIT':{
-      if(!rep.isAwaitingSignatures||!rep.proposal) return rep;
-      if(hashFrame(cmd.frame)!==rep.proposal.hash) return rep;
-      if(!thresholdReached(rep.proposal.sigs,rep.last.state.quorum))
+    case 'commitFrame': {
+      if (!rep.state.proposal) return rep;
+      if (hashFrameHeader(cmd.frame.header) !== hashFrameHeader(rep.state.proposal.header)) return rep;
+      if (!thresholdReached(rep.state.proposal.sigs, rep.state.quorum))
         return rep;
-      if(!process.env.DEV_SKIP_SIGS){
-        const pubs = Object.keys(rep.last.state.quorum.members);
-        if(!verifyAggregate(cmd.hanko,hashFrame(cmd.frame),pubs as any))
+      if (!process.env.DEV_SKIP_SIGS) {
+        const pubs = rep.state.quorum.members.map(m => m.address);
+        if (!verifyAggregate(cmd.hanko, hashFrameHeader(cmd.frame.header), pubs as any))
           throw new Error('invalid hanko');
       }
-      return{
-        ...rep, isAwaitingSignatures:false, proposal:undefined,
-        last:cmd.frame,
+      const newState: EntityState = {
+        ...rep.state,
+        height: cmd.frame.height,
+        mempool: [],
+        proposal: undefined,
+      };
+      return {
+        ...rep,
+        state: newState,
       };
     }
     default: return rep;

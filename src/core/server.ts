@@ -2,12 +2,12 @@ import { keccak_256 as keccak } from '@noble/hashes/sha3';
 import { encServerFrame } from '../codec/rlp';
 import {
   Address,
-  addrKey,
   Hex,
-  Input, Replica,
-  ServerFrame, ServerState,
-  TS,
-  UInt64
+  Input,
+  Replica,
+  ServerFrame,
+  ServerState,
+  Quorum,
 } from '../types';
 import { applyCommand } from './entity';
 
@@ -15,7 +15,7 @@ import { applyCommand } from './entity';
 const computeRoot = (reps: Map<string, Replica>): Hex =>
   ('0x' + Buffer.from(
       keccak(JSON.stringify(
-        [...reps.values()].map(r => ({ addr: r.address, state: r.last.state })),
+        [...reps.values()].map(r => r.state),
         (_, v) => typeof v === 'bigint' ? v.toString() : v
       ))
     ).toString('hex')) as Hex;
@@ -25,89 +25,40 @@ const computeRoot = (reps: Map<string, Replica>): Hex =>
 export function applyServerBlock(
   prev: ServerState,
   batch: Input[],
-  ts: TS,
+  ts: number,
 ){
   let outbox: Input[] = [];
   const replicas = new Map(prev.replicas);
 
   const enqueue = (...msgs: Input[]) => { outbox = outbox.concat(msgs); };
 
-  for (const { cmd } of batch) {
-    const signerPart =
-      cmd.type === 'ADD_TX' ? cmd.tx.from :
-      cmd.type === 'SIGN'   ? cmd.signer   : '';
-    const key = cmd.type === 'IMPORT'
-      ? ''
-      : cmd.addrKey + (signerPart ? ':' + signerPart : '');
+  for (const input of batch) {
+    const [signerIdx, entityId, cmd] = input;
+    const replica = replicas.get(entityId);
+    if (!replica) continue;
 
-    if (cmd.type === 'IMPORT') {
-      const base = cmd.replica;
-      const eKey = addrKey(base.address);
-      for (const m of Object.keys(base.last.state.quorum.members)) {
-        replicas.set(`${eKey}:${m}`, { ...base, proposer: m as Address });
-      }
-      continue;
-    }
+    const nextReplica = applyCommand(replica, cmd);
+    replicas.set(entityId, nextReplica);
 
-    const rep = replicas.get(key) || [...replicas.values()][0];
-    if (!rep) continue;
-
-    const nextRep = applyCommand(rep, cmd);
-    replicas.set(key, nextRep);
-
-    switch (cmd.type) {
-      case 'PROPOSE':
-        if (!rep.proposal && nextRep.proposal) {
-          for (const s of Object.keys(nextRep.last.state.quorum.members)) {
-            if (s === nextRep.proposer) continue;
-            enqueue({
-              from:s as Address, to:nextRep.proposer,
-              cmd:{ type:'SIGN', addrKey:cmd.addrKey,
-                    signer:s as Address, frameHash:nextRep.proposal.hash, sig:'0x00' }
-            });
-          }
-        } break;
-
-      case 'SIGN':
-        if (nextRep.isAwaitingSignatures && nextRep.proposal) {
-          const q   = nextRep.last.state.quorum;
-          const pre = rep.proposal ? power(rep.proposal.sigs,q) : 0;
-          const now = power(nextRep.proposal.sigs,q);
-          if (pre < q.threshold && now >= q.threshold) {
-            enqueue({
-              from:nextRep.proposer, to:'*' as Address,
-              cmd:{ type:'COMMIT', addrKey:cmd.addrKey,
-                    hanko:'0x00', frame:nextRep.proposal as any }
-            });
-          }
-        } break;
-
-      case 'ADD_TX':
-        if (!nextRep.isAwaitingSignatures && nextRep.mempool.length) {
-          enqueue({
-            from:rep.proposer, to:rep.proposer,
-            cmd:{ type:'PROPOSE', addrKey:cmd.addrKey, ts }
-          });
-        }
-    }
+    // Outbox logic to be updated based on spec
   }
 
   const root  = computeRoot(replicas);
+  const inputsRoot = ('0x' + Buffer.from(keccak(JSON.stringify(batch))).toString('hex')) as Hex;
+
   const frame: ServerFrame = {
-    height: (prev.height + 1n) as UInt64,
-    ts,
-    inputs: batch,
+    frameId: Number(prev.height + 1n),
+    timestamp: BigInt(ts),
+    inputsRoot,
     root,
-    hash: '0x00' as Hex,
   };
-  frame.hash = ('0x' + Buffer.from(keccak(encServerFrame(frame))).toString('hex')) as Hex;
 
   return {
-    state : { replicas, height: frame.height },
+    state : { replicas, height: BigInt(frame.frameId) },
     frame,
     outbox,
   };
 }
 
-const power = (sigs:Map<Address,string>, q:any)=>
-  [...sigs.keys()].length; // trivial weight=1 implementation
+const power = (sigs:Record<string, string>, q:Quorum)=>
+  Object.keys(sigs).length; // trivial weight=1 implementation

@@ -18,7 +18,8 @@
       "Bash(git stash:*)",
       "Bash(grep:*)",
       "Bash(rm:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(npm run test:*)"
     ],
     "deny": []
   }
