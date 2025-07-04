@@ -1,7 +1,5 @@
 import type {
   EntityState,
-  Quorum,
-  Address,
   Input,
   Command,
   EntityTx,
@@ -58,7 +56,7 @@ export const encodeCommand = (cmd: Command): RlpInput => {
  * Encode an EntityTx for RLP
  */
 export const encodeEntityTx = (tx: EntityTx): RlpInput => {
-  return [tx.kind, JSON.stringify(tx.data), tx.nonce.toString(), tx.sig];
+  return [tx.kind, JSON.stringify(tx.data), tx.nonce.toString(), tx.from, tx.sig];
 };
 
 /**
@@ -77,6 +75,7 @@ export const encodeEntityState = (state: EntityState): RlpInput => {
   const quorumMembers = state.quorum.members.map((m) => [
     m.address,
     m.shares.toString(),
+    m.pubKey || "",
   ]);
 
   const quorum = [state.quorum.threshold.toString(), quorumMembers];
@@ -91,6 +90,7 @@ export const encodeEntityState = (state: EntityState): RlpInput => {
     tx.kind,
     JSON.stringify(tx.data), // Simple encoding for unknown data
     tx.nonce.toString(),
+    tx.from,
     tx.sig,
   ]);
 

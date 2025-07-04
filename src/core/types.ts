@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/consistent-type-definitions */
 export type Big = bigint;
 export type Address = `0x${string}`;
 export type SignerIdx = number;
@@ -17,12 +16,22 @@ export type Command =
   | { type: "detachReplica" };
 
 /* ── application-level transaction ───────────────────────── */
-export type EntityTx = { kind: string; data: unknown; nonce: Big; sig: string };
+export type EntityTx = { 
+  kind: string; 
+  data: unknown; 
+  nonce: Big; 
+  from: Address;  // signerId, recovered from signature
+  sig: string; 
+};
 
 /* ── quorum definition ───────────────────────────────────── */
 export type Quorum = {
   threshold: Big;
-  members: { address: Address; shares: Big }[];
+  members: { 
+    address: Address; 
+    shares: Big;
+    pubKey?: string; // BLS public key (hex) - optional for backwards compat
+  }[];
 };
 
 /* ── frame structs ───────────────────────────────────────── */
@@ -68,3 +77,41 @@ export type ServerFrame = {
   root: string;
   inputsRoot: string;
 };
+
+/* ── additional types from v1.4.1-RC2 spec ────────────────── */
+export interface EntityInput {
+  jurisdictionId: string;
+  signerId: string;
+  entityId: string;
+  quorumProof: QuorumCertificate;
+  entityTxs: EntityTx[];
+  precommits: string[];
+  proposedBlock: string;
+  observedInbox: InboxMessage[];
+  accountInputs: AccountInput[];
+}
+
+export interface QuorumCertificate {
+  quorumHash: string;
+  quorumStructure: string;
+}
+
+export interface InboxMessage {
+  msgHash: string;
+  fromEntityId: string;
+  message: unknown;
+}
+
+export interface AccountInput {
+  counterEntityId: string;
+  channelId?: Big;
+  accountTxs: AccountTx[];
+}
+
+export interface AccountTx {
+  kind: string;
+  args: unknown;
+  sig: string;
+  nonce: Big;
+  from: Address;
+}

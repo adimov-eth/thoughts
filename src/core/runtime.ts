@@ -1,5 +1,5 @@
 import pino from "pino";
-import { addr, aggregate, pub, randomPriv, sign } from "../crypto/bls";
+import { addr, pub, randomPriv } from "../crypto/bls";
 import { ILogger, makeLogger } from "../logging";
 import type {
   EntityState,
@@ -14,7 +14,7 @@ import type {
 import { applyServerFrame } from "./reducer";
 
 /* ──────────── deterministic key‑gen for demo ──────────── */
-const PRIVS = [...Array(5)].map((_, i) => randomPriv());
+const PRIVS = [...Array(5)].map(() => randomPriv());
 const PUBS = PRIVS.map(pub);
 const ADDRS = PUBS.map(addr);
 
@@ -22,7 +22,11 @@ const ADDRS = PUBS.map(addr);
 const genesis = (): Replica => {
   const quorum: Quorum = {
     threshold: 3n,
-    members: ADDRS.map((a) => ({ address: a as Address, shares: 1n })),
+    members: ADDRS.map((a, i) => ({ 
+      address: a as Address, 
+      shares: 1n,
+      pubKey: "0x" + Buffer.from(PUBS[i]).toString("hex")
+    })),
   };
   const state: EntityState = {
     height: 0n,
@@ -43,7 +47,7 @@ export class Runtime {
 
   constructor(opts: { logLevel?: pino.Level } = {}) {
     this.log = makeLogger(
-      opts.logLevel ?? (process.env.LOG_LEVEL as any) ?? "info",
+      opts.logLevel ?? (process.env.LOG_LEVEL as pino.Level) ?? "info",
     );
     /* IMPORT each signer‑replica */
     const base = genesis();

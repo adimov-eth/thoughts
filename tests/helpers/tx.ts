@@ -9,5 +9,6 @@ export const createChatTx = (
   kind: "chat",
   data: { message: msg },
   nonce,
+  from: sender,
   sig: sender + "00", // Mock signature - first 42 chars are the sender address
 });

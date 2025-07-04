@@ -1,7 +1,8 @@
 import keccak256 from "keccak256";
 import { concat } from "uint8arrays";
 import { encFrameForSigning } from "../codec/rlp";
-import type { EntityTx, FrameHeader, ServerState, Input } from "../types";
+import stringify from "safe-stable-stringify";
+import type { EntityTx, FrameHeader, ServerState, Input } from "./types";
 
 /* ── Merkle helper (unchanged) ───────────────────────────── */
 export const merkle = (leaves: Uint8Array[]): Uint8Array => {
@@ -22,18 +23,38 @@ export const hashFrame = (hdr: FrameHeader, txs: EntityTx[]): Uint8Array => {
 
 /* ── global server Merkle root ───────────────────────────── */
 export const computeServerRoot = (state: ServerState): Uint8Array => {
-  // This is a placeholder implementation
-  const leaves = [...state.replicas.entries()]
+  // Sort entries by key to ensure deterministic ordering
+  const leaves = [...state.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, r]) => keccak256(JSON.stringify(r.state)));
-  return keccak256(Buffer.from(merkle(leaves)));
+    .map(([, replica]) => {
+      // Use deterministic JSON encoding
+      const encoded = stringify(replica.state);
+      return keccak256(Buffer.from(encoded));
+    });
+  return merkle(leaves);
 };
 
 /* ── batch hash for ServerFrame.inputsRoot ───────────────── */
 export const computeInputsRoot = (batch: Input[]): Uint8Array => {
-  // This is a placeholder implementation
+  // Sort by signerIdx for deterministic ordering
   const sortedInputs = batch
     .sort((a, b) => a[0] - b[0])
-    .map((i) => keccak256(JSON.stringify(i)));
-  return keccak256(Buffer.from(merkle(sortedInputs)));
+    .map((input) => {
+      // Use deterministic JSON encoding
+      const encoded = stringify(input);
+      return keccak256(Buffer.from(encoded));
+    });
+  return merkle(sortedInputs);
+};
+
+/* ── mempool Merkle root ─────────────────────────────────────── */
+export const computeMemRoot = (txs: EntityTx[]): Uint8Array => {
+  if (txs.length === 0) {
+    return keccak256(Buffer.from([]));
+  }
+  const leaves = txs.map((tx) => {
+    const encoded = stringify(tx);
+    return keccak256(Buffer.from(encoded));
+  });
+  return merkle(leaves);
 };

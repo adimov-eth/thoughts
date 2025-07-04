@@ -1,27 +1,26 @@
 import { verifyAggregate as verifyAggregateBls } from "../crypto/bls";
-import { computeInputsRoot, computeServerRoot, hashFrame } from "./hash";
+import { computeInputsRoot, computeServerRoot, hashFrame, computeMemRoot } from "./hash";
 import type {
   Address,
   Command,
   EntityState,
-  Frame,
-  FrameHeader,
-  Input,
   EntityTx,
   Replica,
   ServerInput,
   ServerFrame,
   ServerState,
 } from "./types";
-import { concat } from "uint8arrays";
 import type { Hex } from "../types";
 
 const bytesToHex = (b: Uint8Array): Hex =>
   ("0x" + Buffer.from(b).toString("hex")) as Hex;
+const hexToBytes = (h: Hex) => Uint8Array.from(Buffer.from(h.slice(2), "hex"));
+
+// Constants
+const MAX_MEMPOOL = 10_000;
+const MAX_U64 = 2n ** 64n - 1n;
 
 /* ── helpers ─────────────────────────────────────────────── */
-const byNonce = (a: EntityTx, b: EntityTx) =>
-  a.nonce === b.nonce ? 0 : a.nonce < b.nonce ? -1 : 1;
 
 function effectiveWeight(
   sigs: Record<Address, string>,
@@ -34,13 +33,21 @@ function effectiveWeight(
   );
 }
 
-const sortTxs = (mempool: EntityTx[]) => [...mempool].sort(byNonce); // RFC Y-2 canonical ordering
+// RFC Y-2 canonical ordering: nonce → from → kind → index
+const canonicalTxOrder = (a: EntityTx, b: EntityTx) => {
+  if (a.nonce !== b.nonce) return a.nonce < b.nonce ? -1 : 1;
+  if (a.from !== b.from) return a.from.localeCompare(b.from);
+  if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+  return 0; // preserve original order for same nonce/from/kind
+};
+
+const sortTxs = (mempool: EntityTx[]) => [...mempool].sort(canonicalTxOrder);
 
 /* ── command-level reducer ───────────────────────────────── */
 const applyCommand = (
   rep: Replica,
   cmd: Command,
-  now: () => bigint,
+  _now: () => bigint,
 ): Replica => {
   if (
     !rep.attached &&
@@ -61,9 +68,25 @@ const applyCommand = (
 
     /* ---------- add transaction ------------------------------------ */
     case "addTx": {
-      const signer = cmd.tx.sig.slice(0, 42) as Address;
+      // Validate nonce bounds
+      if (cmd.tx.nonce === 0n || cmd.tx.nonce > MAX_U64) return rep;
+      
+      // Extract signer address from tx.from field (already recovered)
+      const signer = cmd.tx.from;
       const last = s.signerRecords[signer]?.nonce ?? 0n;
+      
+      // Check nonce monotonicity
       if (cmd.tx.nonce !== last + 1n) return rep; // nonce gap or reuse – reject
+      
+      // Check mempool size limit
+      if (s.mempool.length >= MAX_MEMPOOL) return rep;
+      
+      // Check for duplicate nonce in mempool
+      const hasDuplicateNonce = s.mempool.some(
+        tx => tx.from === signer && tx.nonce === cmd.tx.nonce
+      );
+      if (hasDuplicateNonce) return rep;
+      
       return {
         ...rep,
         state: {
@@ -81,23 +104,28 @@ const applyCommand = (
     case "proposeFrame": {
       // cheap sanity: header must match local deterministic calc
       const mempoolSorted = sortTxs(s.mempool);
-      const hdr: FrameHeader = {
-        ...cmd.header,
-        memRoot: cmd.header.memRoot, // proposer pre-filled
-      };
-      const checkHash = hashFrame(hdr, mempoolSorted);
-      if ("0x" + Buffer.from(checkHash).toString("hex") !== cmd.header.memRoot)
-        return rep; // invalid proposal
+      
+      // Verify memRoot matches the sorted mempool
+      const expectedMemRoot = bytesToHex(computeMemRoot(mempoolSorted));
+      if (cmd.header.memRoot !== expectedMemRoot) {
+        return rep; // invalid memRoot
+      }
+      
       return {
         ...rep,
-        state: { ...s, proposal: { header: hdr, sigs: {} } },
+        state: { ...s, proposal: { header: cmd.header, sigs: {} } },
       };
     }
 
     /* ---------- quorum member signs ------------------------------- */
     case "signFrame": {
       if (!s.proposal) return rep;
-      const signer = cmd.sig.slice(0, 42) as Address;
+      
+      // TODO: Extract signer from BLS signature verification
+      // For now, we need to pass the signer address with the command
+      // This is a placeholder - in production, derive from BLS pubkey
+      const signer = "0x" + cmd.sig.slice(0, 40) as Address; // temporary
+      
       if (s.proposal.sigs[signer]) return rep; // dup vote
       return {
         ...rep,
@@ -123,11 +151,28 @@ const applyCommand = (
       )
         return rep;
       /* quorum weight */
-      if (
-        effectiveWeight(prop.sigs, s.quorum) < s.quorum.threshold ||
-        !verifyAggregateBls(cmd.hanko as Hex, bytesToHex(expectHash), [])
-      )
-        return rep;
+      const weight = effectiveWeight(prop.sigs, s.quorum);
+      if (weight < s.quorum.threshold) return rep;
+      
+      /* BLS aggregate verification */
+      // Extract public keys of signers who participated
+      const signerAddresses = Object.keys(prop.sigs) as Address[];
+      const memberPubKeys = s.quorum.members
+        .filter(m => signerAddresses.includes(m.address) && m.pubKey)
+        .map(m => hexToBytes(m.pubKey as Hex));
+      
+      if (memberPubKeys.length === 0) {
+        throw new Error("No public keys found for aggregate verification");
+      }
+      
+      // Skip signature verification if explicitly disabled (dev only)
+      if (process.env.SKIP_SIG_VERIFICATION === "true") {
+        console.warn("WARNING: Signature verification disabled");
+      } else {
+        if (!verifyAggregateBls(cmd.hanko as Hex, bytesToHex(expectHash), memberPubKeys)) {
+          return rep;
+        }
+      }
       /* done – accept frame */
       const newState: EntityState = {
         ...(cmd.frame.postStateRoot
@@ -146,14 +191,18 @@ export const applyServerFrame = (
   batch: ServerInput,
   now: () => bigint,
 ): { next: ServerState; frame: ServerFrame } => {
-  /* signerIdx mapping rule (A1) */
+  /* signerIdx mapping rule (A1) - optimized */
   const signerIds = [...new Set(batch.inputs.map((i) => i[0]))].sort(
     (a, b) => a - b,
   );
-  for (const [idx] of batch.inputs)
-    if (idx !== signerIds.indexOf(idx)) throw new Error("signerIdx mismatch");
+  const signerOrder = new Map(signerIds.map((id, i) => [id, i]));
+  for (const [idx] of batch.inputs) {
+    if (idx !== signerOrder.get(idx)) {
+      throw new Error(`signerIdx mismatch: expected ${signerOrder.get(idx)}, got ${idx}`);
+    }
+  }
 
-  let next = new Map(st);
+  const next = new Map(st);
   for (const [idx, id, cmd] of batch.inputs) {
     const key = `${idx}:${id}` as const;
     let rep = next.get(key);
@@ -174,8 +223,8 @@ export const applyServerFrame = (
   const frame: ServerFrame = {
     frameId: batch.frameId,
     timestamp: batch.timestamp,
-    root: Buffer.from(computeServerRoot(next)).toString("hex"),
-    inputsRoot: Buffer.from(computeInputsRoot(batch)).toString("hex"),
+    root: bytesToHex(computeServerRoot(next)),
+    inputsRoot: bytesToHex(computeInputsRoot(batch.inputs)),
   };
   return { next, frame };
 };

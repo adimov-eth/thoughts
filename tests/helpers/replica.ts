@@ -12,6 +12,7 @@ export const createBlankReplica = (): Replica => {
       {
         address: "0x0000000000000000000000000000000000000001" as Address,
         shares: 1n,
+        pubKey: "0x" + "0".repeat(96), // 48 bytes in hex = 96 chars
       },
     ],
   };

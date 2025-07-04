@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { applyServerFrame } from "../src/core/reducer";
 import { sortTransactions } from "../src/core/consensus";
 import { effectiveWeight } from "../src/core/quorum";
-import { hashFrame } from "../src/core/hash";
+import { hashFrame, computeMemRoot } from "../src/core/hash";
 import type {
   ServerState,
   ServerInput,
@@ -234,17 +234,17 @@ describe("Reducer - v1.4.1-RC2 Compliance", () => {
       const replicaWithTx = nextState.get("0:test")!;
       const sortedTxs = sortTransactions(replicaWithTx.state.mempool);
 
-      // Compute the expected hash
+      // Compute the expected memRoot (Merkle root of sorted txs)
+      const memRoot = "0x" + Buffer.from(computeMemRoot(sortedTxs)).toString("hex");
+      
       const header = {
         entityId: "test",
         height: 1n,
-        memRoot: "", // Will be filled by proposer
+        memRoot: memRoot,
         prevStateRoot:
           "0x0000000000000000000000000000000000000000000000000000000000000000",
         proposer: signer1.address,
       };
-      const computedHash = hashFrame(header, sortedTxs);
-      const memRoot = "0x" + Buffer.from(computedHash).toString("hex");
 
       // Propose a frame with the computed hash
       const proposeInput: ServerInput = {
