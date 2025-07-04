@@ -25,6 +25,12 @@ export const verify = async (
   pb: PubKey,
 ): Promise<boolean> => bls.verify(hexToBytes(sig), msg, pb);
 
+export const verifySync = (
+  msg: Uint8Array,
+  sig: Hex,
+  pb: PubKey,
+): boolean => bls.verify(hexToBytes(sig), msg, pb);
+
 export const aggregate = (sigs: Hex[]): Hex =>
   bytesToHex(bls.aggregateSignatures(sigs.map(hexToBytes)));
 

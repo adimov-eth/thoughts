@@ -1,4 +1,4 @@
-import { verifyAggregate as verifyAggregateBls } from "../crypto/bls";
+import { verifyAggregate as verifyAggregateBls, verifySync as verifyBls } from "../crypto/bls";
 import { computeInputsRoot, computeServerRoot, hashFrame, computeMemRoot } from "./hash";
 import type {
   Address,
@@ -44,7 +44,7 @@ const canonicalTxOrder = (a: EntityTx, b: EntityTx) => {
 const sortTxs = (mempool: EntityTx[]) => [...mempool].sort(canonicalTxOrder);
 
 /* ── command-level reducer ───────────────────────────────── */
-const applyCommand = (
+export const applyCommand = (
   rep: Replica,
   cmd: Command,
   _now: () => bigint,
@@ -121,11 +121,27 @@ const applyCommand = (
     case "signFrame": {
       if (!s.proposal) return rep;
       
-      // TODO: Extract signer from BLS signature verification
-      // For now, we need to pass the signer address with the command
-      // This is a placeholder - in production, derive from BLS pubkey
-      const signer = "0x" + cmd.sig.slice(0, 40) as Address; // temporary
+      // Verify BLS signature and identify signer
+      const proposalHash = hashFrame(s.proposal.header, []);
       
+      // Find which quorum member signed this
+      let signer: Address | null = null;
+      for (const member of s.quorum.members) {
+        if (!member.pubKey) continue; // Skip members without BLS pubkey
+        
+        try {
+          const pubKeyBytes = Buffer.from(member.pubKey.slice(2), "hex");
+          const verified = verifyBls(proposalHash, cmd.sig as Hex, pubKeyBytes);
+          if (verified) {
+            signer = member.address;
+            break;
+          }
+        } catch {
+          // Invalid pubkey or signature format, continue to next member
+        }
+      }
+      
+      if (!signer) return rep; // Invalid signature or signer not in quorum
       if (s.proposal.sigs[signer]) return rep; // dup vote
       return {
         ...rep,
