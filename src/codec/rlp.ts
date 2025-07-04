@@ -28,7 +28,7 @@ export const encEntityTx = (t: EntityTx): Buffer =>
       t.kind,
       bnToBuf(t.nonce),
       t.from,
-      JSON.stringify(t.data),
+      rlp.encode(t.data),
       t.sig,
     ]),
   );
@@ -62,7 +62,10 @@ export const encFrameForSigning = (h: FrameHeader, txs: EntityTx[]): Buffer =>
 /* — command — */
 const encCmd = (c: Command): unknown => [
   c.type,
-  JSON.stringify(c, (_, v) => (typeof v === "bigint" ? v.toString() : v)),
+  rlp.encode([
+    (c as any).type,
+    (c as any).snapshot ?? (c as any).tx ?? "",
+  ]),
 ];
 const decCmd = (a: any[]): Command => JSON.parse(a[1].toString());
 

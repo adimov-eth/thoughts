@@ -1,8 +1,8 @@
 import keccak256 from "keccak256";
 import { concat } from "uint8arrays";
 import { encFrameForSigning } from "../codec/rlp";
-import stringify from "safe-stable-stringify";
-import type { EntityTx, FrameHeader, ServerState, Input } from "./types";
+import { encode as rlpEncode } from "@ethereumjs/rlp";
+import type { EntityTx, FrameHeader, ServerState, Input } from "../types";
 
 /* ── Merkle helper (unchanged) ───────────────────────────── */
 export const merkle = (leaves: Uint8Array[]): Uint8Array => {
@@ -26,24 +26,16 @@ export const computeServerRoot = (state: ServerState): Uint8Array => {
   // Sort entries by key to ensure deterministic ordering
   const leaves = [...state.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, replica]) => {
-      // Use deterministic JSON encoding
-      const encoded = stringify(replica.state);
-      return keccak256(Buffer.from(encoded));
-    });
+    .map(([, replica]) => keccak256(rlpEncode(replica.state)));
   return merkle(leaves);
 };
 
 /* ── batch hash for ServerFrame.inputsRoot ───────────────── */
 export const computeInputsRoot = (batch: Input[]): Uint8Array => {
   // Sort by signerIdx for deterministic ordering
-  const sortedInputs = batch
+  const sortedInputs = [...batch]
     .sort((a, b) => a[0] - b[0])
-    .map((input) => {
-      // Use deterministic JSON encoding
-      const encoded = stringify(input);
-      return keccak256(Buffer.from(encoded));
-    });
+    .map((input) => keccak256(rlpEncode(input)));
   return merkle(sortedInputs);
 };
 
@@ -52,9 +44,6 @@ export const computeMemRoot = (txs: EntityTx[]): Uint8Array => {
   if (txs.length === 0) {
     return keccak256(Buffer.from([]));
   }
-  const leaves = txs.map((tx) => {
-    const encoded = stringify(tx);
-    return keccak256(Buffer.from(encoded));
-  });
+  const leaves = txs.map((tx) => keccak256(rlpEncode(tx)));
   return merkle(leaves);
 };

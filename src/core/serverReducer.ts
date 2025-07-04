@@ -4,4 +4,4 @@
  */
 
 export { applyServerFrame as applyServerReducer } from "./reducer";
-export type { ServerInput, ServerFrame, ServerState } from "./types";
+export type { ServerInput, ServerFrame, ServerState } from "../types";

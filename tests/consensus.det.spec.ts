@@ -2,7 +2,7 @@ import { reducer } from "../src/core/consensus.js";
 import { encodeRlp } from "@xln/core/encodeRlp";
 import { sha256 } from "@xln/core/hash";
 import { bls12_381 as bls } from "@noble/curves/bls12-381";
-import type { Frame } from "../src/core/types.js";
+import type { Frame } from "../src/types.js";
 import type { SignFrameCmd, CommitFrameCmd } from "../src/core/consensus.js";
 
 const threshold = 2; // 2/3 majority

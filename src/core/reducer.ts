@@ -9,7 +9,7 @@ import type {
   ServerInput,
   ServerFrame,
   ServerState,
-} from "./types";
+} from "../types";
 import type { Hex } from "../types";
 
 const bytesToHex = (b: Uint8Array): Hex =>
@@ -181,13 +181,8 @@ export const applyCommand = (
         throw new Error("No public keys found for aggregate verification");
       }
       
-      // Skip signature verification if explicitly disabled (dev only)
-      if (process.env.SKIP_SIG_VERIFICATION === "true") {
-        console.warn("WARNING: Signature verification disabled");
-      } else {
-        if (!verifyAggregateBls(cmd.hanko as Hex, bytesToHex(expectHash), memberPubKeys)) {
-          return rep;
-        }
+      if (!verifyAggregateBls(cmd.hanko as Hex, bytesToHex(expectHash), memberPubKeys)) {
+        return rep;
       }
       /* done – accept frame */
       const newState: EntityState = {

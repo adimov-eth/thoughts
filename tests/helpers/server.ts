@@ -4,7 +4,7 @@ import type {
   Quorum,
   EntityState,
   Address,
-} from "../../src/core/types";
+} from "../../src/types";
 
 export const createServer = (): ServerState => {
   const signers = [
