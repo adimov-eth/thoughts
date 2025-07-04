@@ -2,13 +2,13 @@
 
 ## 4.1 Storage duties at a glance
 
-| Duty | File / Column‑family | Trigger |
-|------|---------------------|---------|
-| WAL (write‑ahead log) | wal/ LevelDB default | every 100 ms tick |
-| Mutable KV snapshot | state/ LevelDB CF | every N ServerFrames or ≥ 20 MB delta |
-| Immutable CAS blob | cas/ LevelDB CF | on every Entity COMMIT |
-| Historic frames | entity_blocks/{id}/block_{n}.rlp | on Entity COMMIT |
-| Server frames | server_blocks/{height}.rlp | after each tick |
+| Duty                  | File / Column‑family             | Trigger                               |
+| --------------------- | -------------------------------- | ------------------------------------- |
+| WAL (write‑ahead log) | wal/ LevelDB default             | every 100 ms tick                     |
+| Mutable KV snapshot   | state/ LevelDB CF                | every N ServerFrames or ≥ 20 MB delta |
+| Immutable CAS blob    | cas/ LevelDB CF                  | on every Entity COMMIT                |
+| Historic frames       | entity*blocks/{id}/block*{n}.rlp | on Entity COMMIT                      |
+| Server frames         | server_blocks/{height}.rlp       | after each tick                       |
 
 Dual snapshot model gives fast cold‑start (KV) and audit‑grade history (CAS).
 
@@ -33,12 +33,12 @@ Crash in the middle replays WAL onto last durable snapshot; idempotent.
 
 ## 4.4 Merkle tree rules
 
-| Item | Decision |
-|------|----------|
-| Arity | Binary for all MVP entities (nibble tree reserved for hubs). |
-| Leaf encoding | Canonical RLP of the domain object. |
-| Hash | keccak256(left ‖ right) (no length prefix). |
-| Proof | [leaf, sibling₁, sibling₂, …, root] – verifier re‑hashes bottom‑up. |
+| Item          | Decision                                                            |
+| ------------- | ------------------------------------------------------------------- |
+| Arity         | Binary for all MVP entities (nibble tree reserved for hubs).        |
+| Leaf encoding | Canonical RLP of the domain object.                                 |
+| Hash          | keccak256(left ‖ right) (no length prefix).                         |
+| Proof         | [leaf, sibling₁, sibling₂, …, root] – verifier re‑hashes bottom‑up. |
 
 Rules align with Ethereum's state‑trie conventions.
 
@@ -66,8 +66,8 @@ If assertion fails, disk is corrupted – node halts.
 
 ## 4.8 Reserved future knobs
 
-| Knob | Purpose |
-|------|---------|
-| --snapshot-bytes | byte‑based snapshot trigger |
+| Knob              | Purpose                                 |
+| ----------------- | --------------------------------------- |
+| --snapshot-bytes  | byte‑based snapshot trigger             |
 | --cas-offload-url | push immutable blobs to S3/IPFS gateway |
-| --key-arity | nibble tree for hubs users |
+| --key-arity       | nibble tree for hubs users              |

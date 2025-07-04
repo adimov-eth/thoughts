@@ -3,30 +3,37 @@ on:
   push:
     branches: [main]
     paths:
-      - 'draft/**'
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - 'typedoc.json'
+      - "draft/**"
+      - "docs/**"
+      - "mkdocs.yml"
+      - "typedoc.json"
   pull_request:
     paths:
-      - 'draft/**'
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - 'typedoc.json'
+      - "draft/**"
+      - "docs/**"
+      - "mkdocs.yml"
+      - "typedoc.json"
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Node
-        uses: actions/setup-node@v3
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '18'
-      - run: npm ci
-      - run: npm run typedoc
+          bun-version: latest
+        
+      - name: Install dependencies
+        run: bun install
+      
+      - name: Generate TypeDoc
+        run: bun run typedoc
+      
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.x"
+        
       - run: pip install mkdocs-material
       - run: mkdocs build

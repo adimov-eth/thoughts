@@ -55,11 +55,11 @@ XLN is a cross‑jurisdictional settlement network that lets entities (DAOs, hub
 
 ## 4. Persistence strategy
 
-| File kind | Written by | Trigger | Purpose |
-|-----------|-----------|---------|---------|
-| WAL / ServerFrame | Server adapter | every tick | Replay log for crash recovery |
-| Snapshot | Merkle utils | every N frames or 20 MB diff | Fast restart without replaying full WAL |
-| CAS blob | Server adapter | on commit | Immutable audit trail; enables light‑client proofs |
+| File kind         | Written by     | Trigger                      | Purpose                                            |
+| ----------------- | -------------- | ---------------------------- | -------------------------------------------------- |
+| WAL / ServerFrame | Server adapter | every tick                   | Replay log for crash recovery                      |
+| Snapshot          | Merkle utils   | every N frames or 20 MB diff | Fast restart without replaying full WAL            |
+| CAS blob          | Server adapter | on commit                    | Immutable audit trail; enables light‑client proofs |
 
 Recovery = (latest snapshot) + (WAL segments newer than snapshot) → deterministic state root.
 

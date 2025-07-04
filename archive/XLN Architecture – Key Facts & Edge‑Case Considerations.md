@@ -1,5 +1,4 @@
-
-*(distilled and translated from the engineering discussion)*
+_(distilled and translated from the engineering discussion)_
 
 ---
 
@@ -15,9 +14,9 @@
 
 #### 2. Scalability model
 
-* XLN’s channels are independent **unicast** links; throughput scales linearly with the number of hubs.
-* Target capacity: **10⁹ + TPS** (required for “internet‑scale” payments).
-* Hubs are intentionally lightweight to avoid “too‑big‑to‑fail” nodes; when a hub reaches its internal limit you simply open another.
+- XLN’s channels are independent **unicast** links; throughput scales linearly with the number of hubs.
+- Target capacity: **10⁹ + TPS** (required for “internet‑scale” payments).
+- Hubs are intentionally lightweight to avoid “too‑big‑to‑fail” nodes; when a hub reaches its internal limit you simply open another.
 
 ---
 
@@ -27,9 +26,9 @@ XLN treats **credit** as a first‑class necessity for instant settlement (the �
 
 | Layer‑2 security primitive | Purpose                                                                                                                   | XLN implementation |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| **Account proofs**         | Receipt signed by the hub for every state change; protects against *selective censorship* (“your account never existed”). |                    |
+| **Account proofs**         | Receipt signed by the hub for every state change; protects against _selective censorship_ (“your account never existed”). |                    |
 | **Shared collateral**      | Portion of each balance is escrowed on the jurisdiction layer; protects against total hub bankruptcy (FTX‑style).         |                    |
-| **Sub‑contracts**          | Per‑channel mini‑contracts (HTLC‑like) that secure funds *in motion* (swaps, derivatives, etc.).                          |                    |
+| **Sub‑contracts**          | Per‑channel mini‑contracts (HTLC‑like) that secure funds _in motion_ (swaps, derivatives, etc.).                          |                    |
 
 ---
 
@@ -38,19 +37,19 @@ XLN treats **credit** as a first‑class necessity for instant settlement (the �
 | Object                   | Minimal shape (TypeScript notation)                                                                                                                        | Notes                                                                     |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `Frame`                  | `{ height: number; timestamp: uint64; tx: Tx[]; state: EntityState; }`                                                                                     | “Frame” replaces the word **block** (frames can be as short as ≈ 10 ms).  |
-| `EntityState` (simplest) | `{ chat: Message[]; quorum: Quorum; nonces: Record<Signer, uint64>; … }`                                                                                   | All mutable data, including the *quorum definition*, lives here.          |
+| `EntityState` (simplest) | `{ chat: Message[]; quorum: Quorum; nonces: Record<Signer, uint64>; … }`                                                                                   | All mutable data, including the _quorum definition_, lives here.          |
 | `Quorum`                 | `{ threshold: uint64; members: { address: Address; weight: uint64; }[] }`                                                                                  | Aggregate signature (“hanka”) is valid when ∑weight ≥ threshold.          |
 | `Transaction`            | `{ type: "chat"\|…; data: any; nonce: uint64; sig: bytes64 }`                                                                                              | `from` is derived via `ecrecover` from `sig`.                             |
-| `Input` (server‑level)   | `{ import?: Frame; addTx?: Tx[]; propose?: true; sign?: bytes64[] }`                                                                                       | A single envelope per server tick containing *commands*.                  |
+| `Input` (server‑level)   | `{ import?: Frame; addTx?: Tx[]; propose?: true; sign?: bytes64[] }`                                                                                       | A single envelope per server tick containing _commands_.                  |
 | `Replica` (per‑server)   | `{ signerId: uint16; entityId: string; mempool: Tx[]; finalFrame: Frame; next: { ts: uint64; tx: Tx[]; state: EntityState }; sigs: Map<Hash, bytes64[]> }` | First‑class object a server stores; identified by `(signerId, entityId)`. |
 
 ---
 
 #### 5. Networking vocabulary
 
-* **Broadcast** – jurisdiction layer
-* **Multicast** – entity layer (multi‑signer quorum)
-* **Unicast** – channel/account layer
+- **Broadcast** – jurisdiction layer
+- **Multicast** – entity layer (multi‑signer quorum)
+- **Unicast** – channel/account layer
 
 ---
 
@@ -62,17 +61,17 @@ XLN treats **credit** as a first‑class necessity for instant settlement (the �
 alice@std.xln.eth
 ```
 
-* `entityID` – logical name or 32‑byte hash.
-* `entity‑provider` – smart‑contract that maintains the `quorum` registry.
-* `jurisdiction` – settlement L1 (Ethereum, Solana, …).
+- `entityID` – logical name or 32‑byte hash.
+- `entity‑provider` – smart‑contract that maintains the `quorum` registry.
+- `jurisdiction` – settlement L1 (Ethereum, Solana, …).
 
 ---
 
 #### 7. Proposer logic
 
-* Default proposer = **first signer** in `members` list (usually the one with the largest weight).
-* Future: round‑robin or stake‑weighted rotation.
-* Message must always be addressed to the **current proposer’s server**; if the sender is out of sync it should queue the message locally and retry.
+- Default proposer = **first signer** in `members` list (usually the one with the largest weight).
+- Future: round‑robin or stake‑weighted rotation.
+- Message must always be addressed to the **current proposer’s server**; if the sender is out of sync it should queue the message locally and retry.
 
 ---
 
@@ -96,4 +95,4 @@ alice@std.xln.eth
 
 ---
 
-These points capture the *essential design rules, structures and known corner‑cases* of XLN as discussed, omitting all conversational filler.
+These points capture the _essential design rules, structures and known corner‑cases_ of XLN as discussed, omitting all conversational filler.

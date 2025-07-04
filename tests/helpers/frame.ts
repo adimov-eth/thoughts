@@ -1,14 +1,25 @@
-import { Frame } from '../../src/types'
-import { hashFrame } from '../../src/core/entity'
-import { encFrame } from '../../src/codec/rlp'
+import type { Frame, FrameHeader, Address } from "../../src/core/types";
+import { hashFrame } from "../../src/core/hash";
+
+export const mkFrameHeader = (
+  over: Partial<FrameHeader> = {},
+): FrameHeader => ({
+  entityId: "test-entity",
+  height: 1n,
+  memRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
+  prevStateRoot:
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
+  proposer: "0x0000000000000000000000000000000000000000" as Address,
+  ...over,
+});
 
 export const mkFrame = (over: Partial<Frame> = {}): Frame => ({
-  height: 0n,
-  ts: 0,
+  header: mkFrameHeader(over.header),
   txs: [],
-  state: { quorum: { threshold: 1, members: {} }, chat: [] },
+  timestamp: 1234567890n,
+  postStateRoot:
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
   ...over,
-}) as any
+});
 
-export const frameHash = (f: Frame) => hashFrame(f)
-export const enc = (f: Frame) => encFrame(f)
+export const frameHash = (f: Frame) => hashFrame(f.header, f.txs);
