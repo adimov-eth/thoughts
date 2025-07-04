@@ -1,12 +1,12 @@
-import { Runtime } from './core/runtime';
-import { addr, pub, randomPriv } from './crypto/bls';
+import { Runtime } from "./core/runtime";
+import { addr, pub, randomPriv } from "./crypto/bls";
 
-const rt=new Runtime();
+const rt = new Runtime();
 
 /* build one chat Tx from signer 0 to say “hello” */
-(async ()=>{
-  const priv=randomPriv();
-  const from=addr(pub(priv));
+(async () => {
+  const priv = randomPriv();
+  const from = addr(pub(priv));
   // TAKE signer 0 from runtime instead (for nonce 0)
 })();
 

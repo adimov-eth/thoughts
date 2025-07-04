@@ -4,24 +4,24 @@
 
 ## 4.1 Actors & objects
 
-| Actor / object | Responsibility | Key fields |
-|----------------|----------------|------------|
-| Signer | Holds a BLS12‑381 key–pair; originates transactions; votes on frames. | addr, priv, pub |
-| Proposer | Designated signer that assembles the next frame and collects sigs. | address |
-| Quorum | {threshold, members} – weighted voter set stored in Entity state. | uint threshold; members[address] → {shares, nonce} |
-| Hanko | 48‑byte aggregate BLS signature proving collected power ≥ threshold. | hex |
-| Frame | Ordered batch of Transaction[] + post‑state snapshot. | height, ts, txs, state |
-| Input | Wire envelope {from, to, cmd} that serialises to ServerTx. | cmd one‑of five types (below) |
+| Actor / object | Responsibility                                                        | Key fields                                         |
+| -------------- | --------------------------------------------------------------------- | -------------------------------------------------- |
+| Signer         | Holds a BLS12‑381 key–pair; originates transactions; votes on frames. | addr, priv, pub                                    |
+| Proposer       | Designated signer that assembles the next frame and collects sigs.    | address                                            |
+| Quorum         | {threshold, members} – weighted voter set stored in Entity state.     | uint threshold; members[address] → {shares, nonce} |
+| Hanko          | 48‑byte aggregate BLS signature proving collected power ≥ threshold.  | hex                                                |
+| Frame          | Ordered batch of Transaction[] + post‑state snapshot.                 | height, ts, txs, state                             |
+| Input          | Wire envelope {from, to, cmd} that serialises to ServerTx.            | cmd one‑of five types (below)                      |
 
 ## 4.2 Command set (wire level)
 
-| Command | Payload fields | Emitted by | Purpose |
-|---------|----------------|------------|---------|
-| IMPORT | replica (full object) | Operator / bootstrap | Introduce a new Replica into the server's map. |
-| ADD_TX | addrKey, tx | Client app / RPC | Inject a user Transaction into the target replica's mempool. |
-| PROPOSE | addrKey | Proposer replica | Ask all quorum members to sign the freshly built frame. |
-| SIGN | addrKey, signer, frameHash, sig | Non‑proposer replicas | Contribute an individual BLS sig for the proposal. |
-| COMMIT | addrKey, hanko, frame | Proposer | Broadcast final frame + aggregate sig once threshold is met. |
+| Command | Payload fields                  | Emitted by            | Purpose                                                      |
+| ------- | ------------------------------- | --------------------- | ------------------------------------------------------------ |
+| IMPORT  | replica (full object)           | Operator / bootstrap  | Introduce a new Replica into the server's map.               |
+| ADD_TX  | addrKey, tx                     | Client app / RPC      | Inject a user Transaction into the target replica's mempool. |
+| PROPOSE | addrKey                         | Proposer replica      | Ask all quorum members to sign the freshly built frame.      |
+| SIGN    | addrKey, signer, frameHash, sig | Non‑proposer replicas | Contribute an individual BLS sig for the proposal.           |
+| COMMIT  | addrKey, hanko, frame           | Proposer              | Broadcast final frame + aggregate sig once threshold is met. |
 
 All five commands are pure data; they never contain side‑effect callbacks.
 
@@ -55,6 +55,7 @@ All five commands are pure data; they never contain side‑effect callbacks.
 ## 4.4 Detailed flow
 
 ### 4.4.1 Transaction ingestion
+
 1. Client signs a Transaction (nonce = current Signer Record nonce).
 2. Wrap into ADD_TX → Input → socket.
 3. On next tick, server routes to replica; reducer appends to mempool.
@@ -73,6 +74,7 @@ if (!isAwaitingSignatures && mempool.length > 0):
 ```
 
 ### 4.4.3 Signing
+
 • Replica receives PROPOSE
 → checks frameHash matches local recalculation
 → produces SIG = sign(hash, priv)
@@ -115,12 +117,12 @@ This, combined with JSON‑canonical serialisation, guarantees frame hashes are 
 
 ## 4.6 Security notes
 
-| Threat | Mitigation |
-|--------|------------|
-| Forged frame | Aggregate verify (BLS) binds frame hash to the quorum power. |
-| Replay old SIGN | Signer Record nonce increases every commit; outdated sig refers to stale frame hash. |
-| Censorship by proposer | Any signer may PROPOSE after 100 ms if its own mempool is non‑empty; leader rotation not needed in MVP. |
-| State fork | Merkle root embedded in ServerFrame → WAL → snapshot; divergence detectable via root hash mismatch during replay. |
+| Threat                 | Mitigation                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Forged frame           | Aggregate verify (BLS) binds frame hash to the quorum power.                                                      |
+| Replay old SIGN        | Signer Record nonce increases every commit; outdated sig refers to stale frame hash.                              |
+| Censorship by proposer | Any signer may PROPOSE after 100 ms if its own mempool is non‑empty; leader rotation not needed in MVP.           |
+| State fork             | Merkle root embedded in ServerFrame → WAL → snapshot; divergence detectable via root hash mismatch during replay. |
 
 ## 4.7 Wire encoding (RLP recipe)
 
@@ -136,11 +138,11 @@ ServerTx is the exact byte string; transport adds a length‑prefix only.
 
 ## 4.8 Forward compatibility hooks
 
-| Planned feature | Adjustment needed |
-|-----------------|-------------------|
-| Weighted proposer rotation | Add NEXT_PROPOSER message or deterministic round‑robin from quorum table. |
-| Channel layer | Introduce new TxKind values (credit, debit, open_channel); no protocol change. |
-| Fast‑recovery light client | Add SNAPSHOT_REQUEST / RESPONSE Inputs; leaves consensus untouched. |
+| Planned feature            | Adjustment needed                                                              |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| Weighted proposer rotation | Add NEXT_PROPOSER message or deterministic round‑robin from quorum table.      |
+| Channel layer              | Introduce new TxKind values (credit, debit, open_channel); no protocol change. |
+| Fast‑recovery light client | Add SNAPSHOT_REQUEST / RESPONSE Inputs; leaves consensus untouched.            |
 
 ## 4.9 Reference pseudo‑code (abridged)
 
@@ -171,6 +173,7 @@ if (Cmd === 'COMMIT' && verifyCommit(cmd)) {
 Full implementation lives in `src/entity.ts` and `src/server.ts` (see code skeleton committed earlier).
 
 ## 4.10 Test vector (dev‑net, three signers, threshold = 3)
+
 1. Bootstrap replica with quorum {A:2, B:1, C:1}, threshold=3.
 2. Send chat Tx from A (nonce 0).
 3. Wait 2 ticks → expect:

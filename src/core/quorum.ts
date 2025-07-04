@@ -1,10 +1,10 @@
-import type { Address, Quorum } from './types';
+import type { Address, Quorum } from "./types";
 
 /**
  * Calculate the voting power of a specific address in the quorum
  */
 export const sharesOf = (address: Address, quorum: Quorum): bigint => {
-  const member = quorum.members.find(m => m.address === address);
+  const member = quorum.members.find((m) => m.address === address);
   return member ? member.shares : 0n;
 };
 
@@ -13,12 +13,13 @@ export const sharesOf = (address: Address, quorum: Quorum): bigint => {
  */
 export const totalPower = (
   signers: Address[] | Set<Address>,
-  quorum: Quorum
+  quorum: Quorum,
 ): bigint => {
   const signerSet = signers instanceof Set ? signers : new Set(signers);
   return quorum.members.reduce(
-    (sum, member) => signerSet.has(member.address) ? sum + member.shares : sum,
-    0n
+    (sum, member) =>
+      signerSet.has(member.address) ? sum + member.shares : sum,
+    0n,
   );
 };
 
@@ -27,7 +28,7 @@ export const totalPower = (
  */
 export const hasQuorum = (
   signers: Address[] | Set<Address>,
-  quorum: Quorum
+  quorum: Quorum,
 ): boolean => {
   return totalPower(signers, quorum) >= quorum.threshold;
 };
@@ -37,7 +38,7 @@ export const hasQuorum = (
  */
 export const effectiveWeight = (
   sigs: Record<Address, string>,
-  quorum: Quorum
+  quorum: Quorum,
 ): bigint => {
   const signerAddresses = Object.keys(sigs) as Address[];
   return totalPower(signerAddresses, quorum);

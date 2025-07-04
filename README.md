@@ -5,6 +5,7 @@ Research notes and demo code for the XLN project.
 [![Docs](https://img.shields.io/badge/docs-site-blue)](https://example.com)
 
 ## Quick start
+
 ```bash
 npm install
 npm run typedoc

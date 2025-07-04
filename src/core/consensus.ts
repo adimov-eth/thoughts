@@ -1,5 +1,5 @@
-import type { EntityTx, FrameHeader, EntityState } from '../types';
-import { hashFrame } from './hash';
+import type { EntityTx, FrameHeader, EntityState } from "../types";
+import { hashFrame } from "./hash";
 
 /**
  * Canonical transaction sorting rule (Y-2):
@@ -24,9 +24,9 @@ export const sortTransactions = (txs: EntityTx[]): EntityTx[] => {
  */
 export const selectProposer = (
   height: bigint,
-  quorumMembers: { address: string }[]
+  quorumMembers: { address: string }[],
 ): string => {
-  if (quorumMembers.length === 0) throw new Error('No quorum members');
+  if (quorumMembers.length === 0) throw new Error("No quorum members");
   const index = Number(height % BigInt(quorumMembers.length));
   return quorumMembers[index].address;
 };
@@ -39,25 +39,30 @@ export const buildFrameHeader = (
   height: bigint,
   txs: EntityTx[],
   prevStateRoot: string,
-  proposer: string
+  proposer: string,
 ): FrameHeader => {
   const sortedTxs = sortTransactions(txs);
-  const memRoot = '0x' + Buffer.from(
-    hashFrame({
-      entityId,
-      height,
-      memRoot: '', // placeholder for hash calculation
-      prevStateRoot,
-      proposer: proposer as `0x${string}`
-    }, sortedTxs)
-  ).toString('hex');
-  
+  const memRoot =
+    "0x" +
+    Buffer.from(
+      hashFrame(
+        {
+          entityId,
+          height,
+          memRoot: "", // placeholder for hash calculation
+          prevStateRoot,
+          proposer: proposer as `0x${string}`,
+        },
+        sortedTxs,
+      ),
+    ).toString("hex");
+
   return {
     entityId,
     height,
     memRoot,
     prevStateRoot,
-    proposer: proposer as `0x${string}`
+    proposer: proposer as `0x${string}`,
   };
 };
 
@@ -67,11 +72,11 @@ export const buildFrameHeader = (
 export const verifyFrameHeader = (
   header: FrameHeader,
   localState: EntityState,
-  mempool: EntityTx[]
+  mempool: EntityTx[],
 ): boolean => {
   const sortedTxs = sortTransactions(mempool);
   const expectedHash = hashFrame(header, sortedTxs);
-  const expectedHashHex = '0x' + Buffer.from(expectedHash).toString('hex');
-  
+  const expectedHashHex = "0x" + Buffer.from(expectedHash).toString("hex");
+
   return header.memRoot === expectedHashHex;
 };

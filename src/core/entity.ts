@@ -1,7 +1,7 @@
-import { keccak_256 } from '@noble/hashes/sha3';
-import { bytesToHex } from '@noble/hashes/utils';
-import { encFrameForSigning } from '../codec/rlp';
-import { verifyAggregate } from '../crypto/bls';
+import { keccak_256 } from "@noble/hashes/sha3";
+import { bytesToHex } from "@noble/hashes/utils";
+import { encFrameForSigning } from "../codec/rlp";
+import { verifyAggregate } from "../crypto/bls";
 import {
   Address,
   Command,
@@ -12,11 +12,11 @@ import {
   Hanko,
   Hex,
   Quorum,
-  Replica
-} from '../types';
+  Replica,
+} from "../types";
 
 export const hashFrameForSigning = (h: FrameHeader, txs: EntityTx[]): Hex =>
-  ('0x' + bytesToHex(keccak_256(encFrameForSigning(h, txs)))) as Hex;
+  ("0x" + bytesToHex(keccak_256(encFrameForSigning(h, txs)))) as Hex;
 
 // Sorting Rule (Y-2): nonce → from (signerId) → kind → insertion-index (implicit)
 const sortTx = (a: EntityTx, b: EntityTx) => {
@@ -24,12 +24,12 @@ const sortTx = (a: EntityTx, b: EntityTx) => {
   if (a.from !== b.from) return a.from < b.from ? -1 : 1;
   if (a.kind !== b.kind) return a.kind < b.kind ? -1 : 1;
   return 0;
-}
+};
 
 const sharesOf = (addr: Address, q: Quorum) => {
-  const member = q.members.find(m => m.address === addr);
+  const member = q.members.find((m) => m.address === addr);
   return member ? member.shares : 0n;
-}
+};
 
 const power = (sigs: Record<string, string>, q: Quorum) =>
   Object.keys(sigs).reduce((sum, a) => sum + sharesOf(a as Address, q), 0n);
@@ -38,21 +38,23 @@ const thresholdReached = (sigs: Record<string, string>, q: Quorum) =>
   power(sigs, q) >= q.threshold;
 
 /* ─────────���── domain logic: chat ──────────── */
-export const applyTx = (
-  st: EntityState, tx: EntityTx
-): EntityState => {
-  if (tx.kind !== 'chat') throw new Error('unknown tx kind');
+export const applyTx = (st: EntityState, tx: EntityTx): EntityState => {
+  if (tx.kind !== "chat") throw new Error("unknown tx kind");
   // Note: tx.from is now available, assuming it's recovered from the signature
   const rec = st.signerRecords[tx.from];
-  if (!rec) throw new Error('unknown signer');
-  if (tx.nonce !== rec.nonce) throw new Error('bad nonce');
+  if (!rec) throw new Error("unknown signer");
+  if (tx.nonce !== rec.nonce) throw new Error("bad nonce");
 
   const signerRecords = {
     ...st.signerRecords,
     [tx.from]: { nonce: rec.nonce + 1n },
   };
 
-  const chatMessage = { from: tx.from, msg: (tx.data as any).message, ts: Date.now() };
+  const chatMessage = {
+    from: tx.from,
+    msg: (tx.data as any).message,
+    ts: Date.now(),
+  };
 
   const domainState = st.domainState as { chat: any[] };
   return {
@@ -66,7 +68,9 @@ export const applyTx = (
 };
 
 export const execFrame = (
-  prevState: EntityState, txs: EntityTx[], header: FrameHeader
+  prevState: EntityState,
+  txs: EntityTx[],
+  header: FrameHeader,
 ): Frame => {
   const ordered = txs.slice().sort(sortTx);
   let state = prevState;
@@ -87,38 +91,44 @@ export const execFrame = (
 /* ──────────── replica FSM ──────────── */
 export const applyCommand = (rep: Replica, cmd: Command): Replica => {
   switch (cmd.type) {
-    case 'addTx':
+    case "addTx":
       // It's assumed that the `from` field is populated before calling this.
       return {
         ...rep,
         state: {
           ...rep.state,
           mempool: [...rep.state.mempool, cmd.tx],
-        }
+        },
       };
 
-    case 'proposeFrame': {
+    case "proposeFrame": {
       if (rep.state.proposal || !rep.state.mempool.length) return rep;
       // Proposer logic to be implemented
       return rep;
     }
 
-    case 'signFrame': {
+    case "signFrame": {
       if (!rep.state.proposal) return rep;
       // Signature verification logic to be implemented
       return rep;
     }
 
-    case 'commitFrame': {
+    case "commitFrame": {
       if (!rep.state.proposal) return rep;
-      const proposedBlock = hashFrameForSigning(rep.state.proposal.header, cmd.frame.txs);
-      if (hashFrameForSigning(cmd.frame.header, cmd.frame.txs) !== proposedBlock) return rep;
+      const proposedBlock = hashFrameForSigning(
+        rep.state.proposal.header,
+        cmd.frame.txs,
+      );
+      if (
+        hashFrameForSigning(cmd.frame.header, cmd.frame.txs) !== proposedBlock
+      )
+        return rep;
       if (!thresholdReached(rep.state.proposal.sigs, rep.state.quorum))
         return rep;
       if (!process.env.DEV_SKIP_SIGS) {
-        const pubs = rep.state.quorum.members.map(m => m.address);
+        const pubs = rep.state.quorum.members.map((m) => m.address);
         if (!verifyAggregate(cmd.hanko, proposedBlock, pubs as any))
-          throw new Error('invalid hanko');
+          throw new Error("invalid hanko");
       }
       const newState: EntityState = {
         ...rep.state,
@@ -131,6 +141,7 @@ export const applyCommand = (rep: Replica, cmd: Command): Replica => {
         state: newState,
       };
     }
-    default: return rep;
+    default:
+      return rep;
   }
 };

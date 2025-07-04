@@ -1,24 +1,24 @@
-Below is a **concrete, engineering‑grade action plan** to close every gap identified in the audit and bring the *adimov‑eth/thoughts* codebase fully in‑line with the **XLN v1.3 Unified Specification** and the project’s own *principles.md*.
-Tasks are grouped by theme, ordered for maximal parallelism, and sized for 6 weekly sprints (≈ 1.5 months).  Each task lists:
+Below is a **concrete, engineering‑grade action plan** to close every gap identified in the audit and bring the _adimov‑eth/thoughts_ codebase fully in‑line with the **XLN v1.3 Unified Specification** and the project’s own _principles.md_.
+Tasks are grouped by theme, ordered for maximal parallelism, and sized for 6 weekly sprints (≈ 1.5 months). Each task lists:
 
-* **Goal** – measurable deliverable / acceptance test
-* **Key changes** – high‑level code moves or new modules
-* **Implementation notes** – architectural details, naming, function signatures, edge‑cases
+- **Goal** – measurable deliverable / acceptance test
+- **Key changes** – high‑level code moves or new modules
+- **Implementation notes** – architectural details, naming, function signatures, edge‑cases
 
 ---
 
-## 0.  ‼️  Guiding constraints (apply to all tasks)
+## 0. ‼️ Guiding constraints (apply to all tasks)
 
-| Rule                                         | Rationale / enforcement                                                                                            |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Pure core, side‑effects in adapters**      | No direct DB, timers, or network in `/core/**`. Use dependency‑injection of `Clock`, `Storage`, `Network` records. |
-| **RO‑RO style**                              | Every multi‑param fn receives one input object and returns one output object (`{ nextState, outbox, effects }`).   |
-| **Immutability & deterministic order**       | Arrays/Maps cloned on write; Outbox sorted `[originEntityId, seq]` before routing.                                 |
-| **Bun runtime only**                         | All scripts use `bun test`, `bun run`.                                                                             |
-| **Folder layout**                            | \`\`\`                                                                                                             |
-| /core        – pure state machines           |                                                                                                                    |
-| /infra       – persistence & crypto adapters |                                                                                                                    |
-| /runtime     – CLI & service bootstrap       |                                                                                                                    |
+| Rule                                    | Rationale / enforcement                                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Pure core, side‑effects in adapters** | No direct DB, timers, or network in `/core/**`. Use dependency‑injection of `Clock`, `Storage`, `Network` records. |
+| **RO‑RO style**                         | Every multi‑param fn receives one input object and returns one output object (`{ nextState, outbox, effects }`).   |
+| **Immutability & deterministic order**  | Arrays/Maps cloned on write; Outbox sorted `[originEntityId, seq]` before routing.                                 |
+| **Bun runtime only**                    | All scripts use `bun test`, `bun run`.                                                                             |
+| **Folder layout**                       | \`\`\`                                                                                                             |
+| /core – pure state machines             |                                                                                                                    |
+| /infra – persistence & crypto adapters  |                                                                                                                    |
+| /runtime – CLI & service bootstrap      |                                                                                                                    |
 
 ```|
 | **Brand types** | `type EntityId = string & { __brand: 'EntityId' }`, same for `SignerId`, `FrameHeight`. |
@@ -122,16 +122,16 @@ Tasks are grouped by theme, ordered for maximal parallelism, and sized for 6 w
 
 ## 10.  **Documentation & Developer UX**  *(Sprint 5)*
 
-1. **SPEC.md → v1.3.1** – patch numbers on areas clarified by implementation (e.g. single‑sig fast path, Outbox deterministic order).  
-2. **/docs/architecture.md** – diagrams of new router/consensus flows.  
+1. **SPEC.md → v1.3.1** – patch numbers on areas clarified by implementation (e.g. single‑sig fast path, Outbox deterministic order).
+2. **/docs/architecture.md** – diagrams of new router/consensus flows.
 3. **/examples/** – runnable `hello-chat` scenario mirroring §13 walkthrough.
 
 ---
 
 ## 11.  **Performance Tuning & Final QA**  *(Sprint 6)*
 
-* **Benchmarks**: script to measure tick latency @100 TPS & 10 k entities.  
-* **Heap profiling**: ensure MerkleStore caches don’t leak.  
+* **Benchmarks**: script to measure tick latency @100 TPS & 10 k entities.
+* **Heap profiling**: ensure MerkleStore caches don’t leak.
 * **Snapshot frequency vs throughput**: compute sweet‑spot, recommend defaults.
 
 ---
@@ -153,9 +153,9 @@ Tasks are grouped by theme, ordered for maximal parallelism, and sized for 6 w
 
 ## Next Steps for Team Leads
 
-1. **Create GitHub Projects board** with the tasks above; label by sprint.  
-2. **Assign ownership** (at least one reviewer with veto per module).  
-3. **Enable branch protection**: PR must include unit test or integration script reproducing the scenario fixed/implemented.  
+1. **Create GitHub Projects board** with the tasks above; label by sprint.
+2. **Assign ownership** (at least one reviewer with veto per module).
+3. **Enable branch protection**: PR must include unit test or integration script reproducing the scenario fixed/implemented.
 4. **Add CI workflows** for lint (`biome`), type‑check, unit test, replay‑verification test, and coverage gate (≥ 90 %).
 
 Executing the plan will bring the XLN prototype to **feature‑complete MVP** status, ready for external audit and milestone M1 (“DAO‑only”) launch.

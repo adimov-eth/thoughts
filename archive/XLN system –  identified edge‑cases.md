@@ -1,13 +1,12 @@
-
-*(translated and reduced to verifiable design details only; all chatter, opinions and duplicates removed)*
+_(translated and reduced to verifiable design details only; all chatter, opinions and duplicates removed)_
 
 ---
 
 #### 1. High‑level purpose & positioning
 
-* **“Banking network 2.0”**: aims to replace conventional payment rails with **instant, feeless, horizontally‑scalable value transfer**.
-* **Security model** presented as *cleaner* and more easily auditable than existing L2 roll‑ups or custodial wallets.
-* Target early markets:
+- **“Banking network 2.0”**: aims to replace conventional payment rails with **instant, feeless, horizontally‑scalable value transfer**.
+- **Security model** presented as _cleaner_ and more easily auditable than existing L2 roll‑ups or custodial wallets.
+- Target early markets:
 
   1. **Micropayments in gaming** (in‑game micro‑transactions).
   2. **Streaming / live‑donation platforms**.
@@ -26,8 +25,8 @@
 
 Characteristics:
 
-* Each layer shares the same abstract interface: *Input → deterministic transition → Outbox* (self‑similar “fractal” composition).
-* Implementation style: **pure functional / declarative**, deterministic, stateless processing inside a frame.
+- Each layer shares the same abstract interface: _Input → deterministic transition → Outbox_ (self‑similar “fractal” composition).
+- Implementation style: **pure functional / declarative**, deterministic, stateless processing inside a frame.
 
 ---
 
@@ -37,9 +36,9 @@ Characteristics:
 
 ```ts
 interface Input {
-  from   : Address        // sender
-  to     : Address        // addressed Entity
-  command: Command        // see below
+  from: Address; // sender
+  to: Address; // addressed Entity
+  command: Command; // see below
 }
 ```
 
@@ -47,25 +46,25 @@ interface Input {
 
 `type` field (aka `command.type`) may be:
 
-* `importEntity` – bootstrap / state sync.
-* `addTransactions` – pack one or many user transactions.
-* `proposeFrame` – proposer’s candidate block.
-* `signFrame` – validator signature for a proposed frame.
-* `commitFrame` – proposer declares quorum reached; finalizes frame.
+- `importEntity` – bootstrap / state sync.
+- `addTransactions` – pack one or many user transactions.
+- `proposeFrame` – proposer’s candidate block.
+- `signFrame` – validator signature for a proposed frame.
+- `commitFrame` – proposer declares quorum reached; finalizes frame.
 
 ##### 3.3 `Transaction` (application‑level)
 
 ```ts
 interface Transaction {
-  kind      : string   // e.g. "chat" in current PoC
-  nonce     : bigint
-  signature : bytes     // placeholder in simulation
+  kind: string; // e.g. "chat" in current PoC
+  nonce: bigint;
+  signature: bytes; // placeholder in simulation
   // domain‑specific payload goes here
 }
 ```
 
-* No per‑transaction timestamp; ordering is strictly the sequence of inclusion inside a frame.
-* **Frame timestamp** is set once by the proposer and written to the frame header.
+- No per‑transaction timestamp; ordering is strictly the sequence of inclusion inside a frame.
+- **Frame timestamp** is set once by the proposer and written to the frame header.
 
 ---
 
@@ -78,25 +77,26 @@ interface Transaction {
    4. `importEntity` (if any)
    5. batched `addTransactions`
    6. `proposeFrame` (single proposer)
-7. **Signing round** – Other validators verify, return `signFrame`.
-8. **Commit** – When proposer holds sufficient signatures, it issues `commitFrame`; all replicas move to the new state and emit their **Outbox**.
+
+4. **Signing round** – Other validators verify, return `signFrame`.
+5. **Commit** – When proposer holds sufficient signatures, it issues `commitFrame`; all replicas move to the new state and emit their **Outbox**.
 
 Edge‑cases called out:
 
-* *Dry‑run / “pre‑commit”*: validators execute proposed block but do **not** mutate local state until `commitFrame` arrives.
-* All state changes are deterministic; signature verification stubbed (`1`/`true`) in early simulation.
-* “Outbox” messages are queued for the next server frame.
+- _Dry‑run / “pre‑commit”_: validators execute proposed block but do **not** mutate local state until `commitFrame` arrives.
+- All state changes are deterministic; signature verification stubbed (`1`/`true`) in early simulation.
+- “Outbox” messages are queued for the next server frame.
 
 ---
 
 #### 5. Fiat on/off‑ramp & network‑effect challenges
 
-| Problem                             | Proposed mitigation                                                                                                                                      |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Chicken‑and‑egg liquidity**       | Seed liquidity pools for key pairs; focus on one vertical (e.g. game‑dev) first, then reinvest where traction appears.                                   |
+| Problem                             | Proposed mitigation                                                                                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Chicken‑and‑egg liquidity**       | Seed liquidity pools for key pairs; focus on one vertical (e.g. game‑dev) first, then reinvest where traction appears.                                    |
 | **Fiat bridge**                     | Country‑specific “hub partners” licensed locally (e.g. Russia, UAE, Thailand). They hold banking licences and charge a spread to swap cash ↔ XLN tokens. |
-| **P2P cash deals**                  | Still unsolved; requires **escrow / hash‑time‑lock** mechanics not available in legacy rails.                                                            |
-| **Rotating savings groups (ROSCA)** | XLN smart entities can replace trust‑based “admin” with deterministic rules, removing single‑point‑of‑failure.                                           |
+| **P2P cash deals**                  | Still unsolved; requires **escrow / hash‑time‑lock** mechanics not available in legacy rails.                                                             |
+| **Rotating savings groups (ROSCA)** | XLN smart entities can replace trust‑based “admin” with deterministic rules, removing single‑point‑of‑failure.                                            |
 
 ---
 
@@ -111,10 +111,10 @@ Edge‑cases called out:
 
 #### 7. Security & user‑experience claims
 
-* **Self‑custody**: funds cannot be seized by wallet operator (“sovereign by design”).
-* **Free / near‑zero fee** transfers; cost may be zero in many routings.
-* **Instant settlement** inside one frame; scalability achieved by sharding into multiple Entities and later Channels.
-* UX goal: *“better than any existing crypto for a casual ‘send money to a friend’ use‑case.”*
+- **Self‑custody**: funds cannot be seized by wallet operator (“sovereign by design”).
+- **Free / near‑zero fee** transfers; cost may be zero in many routings.
+- **Instant settlement** inside one frame; scalability achieved by sharding into multiple Entities and later Channels.
+- UX goal: _“better than any existing crypto for a casual ‘send money to a friend’ use‑case.”_
 
 ---
 
