@@ -9,11 +9,11 @@ import {
   EntityTx,
   Frame,
   FrameHeader,
-  Hanko,
   Hex,
   Quorum,
   Replica,
 } from "../types";
+import type { PubKey } from "../crypto/bls";
 
 export const hashFrameForSigning = (h: FrameHeader, txs: EntityTx[]): Hex =>
   ("0x" + bytesToHex(keccak_256(encFrameForSigning(h, txs)))) as Hex;
@@ -52,11 +52,11 @@ export const applyTx = (st: EntityState, tx: EntityTx): EntityState => {
 
   const chatMessage = {
     from: tx.from,
-    msg: (tx.data as any).message,
+    msg: (tx.data as { message: string }).message,
     ts: Date.now(),
   };
 
-  const domainState = st.domainState as { chat: any[] };
+  const domainState = st.domainState as { chat: Array<{ from: string; msg: string; ts: bigint }> };
   return {
     ...st,
     signerRecords,
@@ -127,7 +127,7 @@ export const applyCommand = (rep: Replica, cmd: Command): Replica => {
         return rep;
       if (!process.env.DEV_SKIP_SIGS) {
         const pubs = rep.state.quorum.members.map((m) => m.address);
-        if (!verifyAggregate(cmd.hanko, proposedBlock, pubs as any))
+        if (!verifyAggregate(cmd.hanko, proposedBlock, pubs as PubKey[]))
           throw new Error("invalid hanko");
       }
       const newState: EntityState = {

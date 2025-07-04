@@ -1,13 +1,6 @@
 import { Runtime } from "./core/runtime";
-import { addr, pub, randomPriv } from "./crypto/bls";
 
-const rt = new Runtime();
+// Create runtime instance
+const _rt = new Runtime();
 
-/* build one chat Tx from signer 0 to say “hello” */
-(async () => {
-  const priv = randomPriv();
-  const from = addr(pub(priv));
-  // TAKE signer 0 from runtime instead (for nonce 0)
-})();
-
-// (left minimal – insert your own test harness; see "next steps" below).
+// This is a minimal entry point - see tests for usage examples

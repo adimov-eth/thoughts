@@ -3,7 +3,7 @@
 
 import { Input } from "../types";
 
-export const decodeInbox = (msg: any): Input => {
+export const decodeInbox = (msg: unknown): Input => {
   // TBD: Implement inbox decoding logic from spec.md
-  return msg;
+  return msg as Input;
 };

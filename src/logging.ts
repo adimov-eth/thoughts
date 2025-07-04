@@ -1,10 +1,10 @@
 import pino from "pino";
 
 export interface ILogger {
-  debug: (...a: any[]) => void;
-  info: (...a: any[]) => void;
-  warn: (...a: any[]) => void;
-  error: (...a: any[]) => void;
+  debug: (...a: unknown[]) => void;
+  info: (...a: unknown[]) => void;
+  warn: (...a: unknown[]) => void;
+  error: (...a: unknown[]) => void;
 }
 
 export const makeLogger = (level: pino.Level = "info"): ILogger =>

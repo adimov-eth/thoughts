@@ -1,14 +1,11 @@
 // Pure RLP encode/decode helpers (no external deps except rlp).
 
-import { keccak_256 as keccak } from "@noble/hashes/sha3";
 import * as rlp from "rlp";
 import type {
   Address,
   Command,
   EntityTx,
-  Frame,
   FrameHeader,
-  Hex,
   Input,
   ServerFrame,
 } from "../types";
@@ -64,14 +61,15 @@ const encCmd = (c: Command): unknown => [
   c.type,
   JSON.stringify(c, (_, v) => (typeof v === "bigint" ? v.toString() : v)),
 ];
-const decCmd = (a: any[]): Command => JSON.parse(a[1].toString());
+const decCmd = (a: unknown[]): Command => JSON.parse(a[1].toString());
 
 /* — input — */
 export const encInput = (i: Input): Buffer =>
-  Buffer.from(rlp.encode([i[0], i[1], encCmd(i[2]) as any]));
+  Buffer.from(rlp.encode([i[0], i[1], encCmd(i[2]) as rlp.Input]));
 export const decInput = (b: Buffer): Input => {
-  const [signerIdx, entityId, cmd] = rlp.decode(b) as any[];
-  return [signerIdx, entityId, decCmd(cmd)] as Input;
+  const decoded = rlp.decode(b) as [Buffer, Buffer, unknown[]];
+  const [signerIdx, entityId, cmd] = decoded;
+  return [Number(signerIdx.toString()), entityId.toString(), decCmd(cmd)] as Input;
 };
 
 /* — server frame — */
@@ -81,7 +79,8 @@ export const encServerFrame = (f: ServerFrame): Buffer =>
   );
 
 export const decServerFrame = (b: Buffer): ServerFrame => {
-  const [frameId, timestamp, inputsRoot, root] = rlp.decode(b) as any[];
+  const decoded = rlp.decode(b) as [Buffer, Buffer, Buffer, Buffer];
+  const [frameId, timestamp, inputsRoot, root] = decoded;
   const frame: ServerFrame = {
     frameId: Number(frameId.toString()),
     timestamp: bufToBn(timestamp),
