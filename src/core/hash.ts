@@ -3,13 +3,24 @@ import { concat } from "uint8arrays";
 import { encFrameForSigning } from "../codec/rlp";
 import { encode as rlpEncode } from "@ethereumjs/rlp";
 
-const canonicalize = (v: any): any => {
-  if (Array.isArray(v)) return v.map(canonicalize);
-  if (v && typeof v === "object")
-    return Object.keys(v)
+/**
+ * Recursively sort object keys to produce a canonical JSON-like structure.
+ * Throws if a circular reference is encountered.
+ */
+export const canonicalize = (value: unknown, seen = new Set<object>()): any => {
+  if (Array.isArray(value)) return value.map((v) => canonicalize(v, seen));
+  if (value && typeof value === "object") {
+    if (seen.has(value)) {
+      throw new Error("Cannot canonicalize circular structure");
+    }
+    seen.add(value);
+    const res = Object.keys(value)
       .sort()
-      .map((k) => [k, canonicalize(v[k])]);
-  return v;
+      .map((k) => [k, canonicalize((value as any)[k], seen)]);
+    seen.delete(value);
+    return res;
+  }
+  return value;
 };
 import type { EntityTx, FrameHeader, ServerState, Input } from "../types";
 

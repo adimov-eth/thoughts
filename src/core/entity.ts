@@ -127,7 +127,12 @@ export const applyCommand = (rep: Replica, cmd: Command): Replica => {
         return rep;
       if (!thresholdReached(rep.state.proposal.sigs, rep.state.quorum))
         return rep;
-      if (!process.env.DEV_SKIP_SIGS) {
+      // DEV_SKIP_SIGS is intended for unit tests only. When set to 'true'
+      // signature verification is skipped to speed up test suites.
+      const skip = process.env.DEV_SKIP_SIGS === "true";
+      if (skip) {
+        console.warn("Signature verification disabled via DEV_SKIP_SIGS");
+      } else {
         const pubs = rep.state.quorum.members.map((m) => m.address);
         if (!verifyAggregate(cmd.hanko, proposedBlock, pubs as any))
           throw new Error("invalid hanko");
